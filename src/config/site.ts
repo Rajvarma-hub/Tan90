@@ -1,7 +1,9 @@
 import { publicEnv } from "@/config/env.public";
 
 export const siteConfig = {
-  name: "tan90",
-  description: "A full-stack Next.js application.",
+  name: "Tan90Thermal Portal",
+  shortName: "Tan90thermal",
+  tagline: "Cooling Solutions",
+  description: "Tan90Thermal operations portal.",
   url: publicEnv.NEXT_PUBLIC_APP_URL,
 } as const;

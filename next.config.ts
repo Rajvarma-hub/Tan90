@@ -19,7 +19,7 @@ const nextConfig: NextConfig = {
   experimental: {
     agentFeedback: true,
   },
-  output: "standalone",
+  output: process.env.NEXT_OUTPUT === "standalone" ? "standalone" : undefined,
   poweredByHeader: false,
   cacheComponents: true,
   partialPrefetching: true,

@@ -14,7 +14,7 @@ If you don't have a `.env.local` yet, create one from [.env.example](.env.exampl
 | Command                       | Purpose                                     |
 | ----------------------------- | ------------------------------------------- |
 | `npm run dev`                 | Start the dev server                        |
-| `npm run build`               | Production build (standalone output)        |
+| `npm run build`               | Production build                            |
 | `npm run start`               | Serve the production build                  |
 | `npm run lint`                | ESLint                                      |
 | `npm run typecheck`           | Generate route types and run `tsc --noEmit` |
@@ -25,16 +25,17 @@ If you don't have a `.env.local` yet, create one from [.env.example](.env.exampl
 ```
 src/
 ├── app/                 # Routing only: layouts, pages, route handlers, special files
-│   ├── (marketing)/     # Public pages sharing the marketing shell
+│   ├── (portal)/        # Authenticated app: sidebar + header shell, /orders, /inventory, /assets
 │   ├── api/             # Route handlers (e.g. /api/health)
 │   ├── error.tsx        # Segment error boundary
 │   ├── global-error.tsx # Root error boundary
 │   ├── not-found.tsx    # 404 UI
 │   └── layout.tsx       # Root layout: <html>, fonts, metadata
 ├── components/
-│   ├── layout/          # App shell pieces (header, footer, nav)
+│   ├── brand/           # Logo
+│   ├── layout/          # App shell: sidebar, header, shell state
 │   └── ui/              # Design-system primitives (button, input, ...)
-├── config/              # Validated env + static app config
+├── config/              # Validated env, site config, sidebar navigation
 ├── features/            # Domain modules, one folder per feature
 ├── hooks/               # Shared client hooks
 ├── lib/                 # Isomorphic utilities: AppError, ActionResult, validation
@@ -60,4 +61,4 @@ src/
 - **Caching.** Cache Components is enabled: cache with `"use cache"` + `cacheLife`/`cacheTag`, and wrap request-time data (`cookies()`, `headers()`, uncached fetches) in `<Suspense>`.
 - **Imports** use the `@/*` alias (maps to `src/*`). Typed routes are enabled, so `<Link href>` is checked at build time.
 - **Naming:** kebab-case file names, PascalCase components, named exports outside of Next.js special files.
-- **Deployment.** Builds use `output: "standalone"`. The [Dockerfile](Dockerfile) runs as a non-root user and checks `/api/health`. Pass `NEXT_PUBLIC_*` values as build args, because they are inlined at build time. Provide server secrets as runtime environment variables. Security headers are set in [next.config.ts](next.config.ts).
+- **Deployment.** The [Dockerfile](Dockerfile) builds with `NEXT_OUTPUT=standalone`, runs as a non-root user and checks `/api/health`. Pass `NEXT_PUBLIC_*` values as build args, because they are inlined at build time. Provide server secrets as runtime environment variables. Security headers are set in [next.config.ts](next.config.ts).

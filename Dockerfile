@@ -15,7 +15,8 @@ COPY . .
 # NEXT_PUBLIC_* values are inlined at build time, so they must be passed as build args.
 ARG NEXT_PUBLIC_APP_URL
 ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
-ENV NEXT_TELEMETRY_DISABLED=1
+ENV NEXT_TELEMETRY_DISABLED=1 \
+    NEXT_OUTPUT=standalone
 RUN npm run build
 
 FROM base AS runner
