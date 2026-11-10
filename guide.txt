@@ -1,0 +1,309 @@
+════════════════════════════════════════════════════════════════════
+TAN90 BACKEND — SEEDED DATA REFERENCE
+Password for ALL users: password123
+════════════════════════════════════════════════════════════════════
+
+
+────────────────────────────────────────────────────────────────────
+LOCATIONS (6)
+────────────────────────────────────────────────────────────────────
+
+loc-fs-blr    FS-BLR    Freezing Station Bangalore    FREEZING_STATION
+loc-fs-chn    FS-CHN    Freezing Station Chennai      FREEZING_STATION
+loc-fs-hyd    FS-HYD    Freezing Station Hyderabad    FREEZING_STATION
+loc-fs-del    FS-DEL    Freezing Station Delhi NCR    FREEZING_STATION
+loc-wh-blr    WH-BLR    Warehouse Bangalore           WAREHOUSE
+loc-wh-chn    WH-CHN    Warehouse Chennai             WAREHOUSE
+
+
+────────────────────────────────────────────────────────────────────
+CUSTOMERS (6)
+────────────────────────────────────────────────────────────────────
+
+cust-hyperpure    Zomato Hyperpure
+cust-instamart    Swiggy Instamart
+cust-blinkit      Blinkit
+cust-kisaan       Kisaan Konnect
+cust-medplus      MedPlus Pharmacy
+cust-zepto        Zepto
+
+
+────────────────────────────────────────────────────────────────────
+USERS (18) — password: password123
+────────────────────────────────────────────────────────────────────
+
+admin@tan90.local         SUPER_ADMIN                all
+admin2@tan90.local        SUPER_ADMIN                all
+ops@tan90.local           OPERATIONS_ADMIN           all
+ops2@tan90.local          OPERATIONS_ADMIN           all
+fsblr@tan90.local         FREEZING_STATION_MANAGER   loc-fs-blr
+fschn@tan90.local         FREEZING_STATION_MANAGER   loc-fs-chn
+whblr@tan90.local         WAREHOUSE                  loc-wh-blr
+whchn@tan90.local         WAREHOUSE                  loc-wh-chn
+packer1@tan90.local       PACKING_WORKER             loc-fs-blr
+packer2@tan90.local       PACKING_WORKER             loc-fs-blr
+packer3@tan90.local       PACKING_WORKER             loc-fs-chn
+driver1@tan90.local       DRIVER                     own tasks
+driver2@tan90.local       DRIVER                     own tasks
+driver3@tan90.local       DRIVER                     own tasks
+hyperpure@tan90.local     CUSTOMER                   cust-hyperpure
+instamart@tan90.local     CUSTOMER                   cust-instamart
+blinkit@tan90.local       CUSTOMER                   cust-blinkit
+sc@tan90.local            SUPPLY_CHAIN_MANAGER       read-only
+
+
+────────────────────────────────────────────────────────────────────
+PRODUCTS — PCM SKUs (8)
+────────────────────────────────────────────────────────────────────
+
+prd-pcm-neg50      PCM-NEG50        -50 C    PCM Panel -50 C (Ultra-cold Vaccine)
+prd-pcm-neg24      PCM-NEG24        -24 C    PCM Panel -24 C (Frozen)
+prd-pcm-neg18      PCM-NEG18        -18 C    PCM Panel -18 C (Deep Chilled)
+prd-pcm-neg10      PCM-NEG10        -10 C    PCM Panel -10 C (Chilled)
+prd-pcm-sachet     PCM-SACHET-100   -10 C    PCM Sachet 100ml
+prd-pcm-pos5       PCM-POS5          +5 C    PCM Panel +5 C (Pharma 2-8 C)
+prd-bag-lastmile   BAG-LASTMILE      +5 C    Last Mile Delivery Bag
+prd-pcm-pos15      PCM-POS15        +15 C    PCM Panel +15 C (Warm Chain)
+
+
+────────────────────────────────────────────────────────────────────
+CONTAINER TYPES (8)
+Reference: GET /api/containers/types
+────────────────────────────────────────────────────────────────────
+
+SHIP-15     15L Shipper Box            15 L
+SHIP-20     20L Shipper Box            20 L
+SHIP-40     40L Shipper Box            40 L
+SHIP-60     60L Shipper Box            60 L
+SHIP-100    100L Shipper Box          100 L
+ICE-50      50L Blowmolded Ice Box     50 L
+ICE-100     100L Rotomolded Icebox    100 L
+BAG-20      20L Insulation Bag         20 L
+
+
+────────────────────────────────────────────────────────────────────
+CONTAINERS (60) + EPCs — all AVAILABLE at start
+────────────────────────────────────────────────────────────────────
+
+AT loc-fs-blr (Bangalore) — 20 containers
+
+  con-000001    E280A1000000000000000001    20L Shipper Box
+  con-000002    E280A1000000000000000002    20L Shipper Box
+  con-000003    E280A1000000000000000003    20L Shipper Box
+  con-000004    E280A1000000000000000004    20L Shipper Box
+  con-000005    E280A1000000000000000005    20L Shipper Box
+  con-000006    E280A1000000000000000006    20L Shipper Box
+  con-000007    E280A1000000000000000007    20L Shipper Box
+  con-000008    E280A1000000000000000008    20L Shipper Box
+  con-000009    E280A1000000000000000009    40L Shipper Box
+  con-000010    E280A1000000000000000010    40L Shipper Box
+  con-000011    E280A1000000000000000011    40L Shipper Box
+  con-000012    E280A1000000000000000012    40L Shipper Box
+  con-000013    E280A1000000000000000013    40L Shipper Box
+  con-000014    E280A1000000000000000014    60L Shipper Box
+  con-000015    E280A1000000000000000015    60L Shipper Box
+  con-000016    E280A1000000000000000016    60L Shipper Box
+  con-000017    E280A1000000000000000017    50L Blowmolded Ice Box
+  con-000018    E280A1000000000000000018    50L Blowmolded Ice Box
+  con-000019    E280A1000000000000000019    50L Blowmolded Ice Box
+  con-000020    E280A1000000000000000020    50L Blowmolded Ice Box
+
+AT loc-fs-chn (Chennai) — 16 containers
+
+  con-000021    E280A1000000000000000021    15L Shipper Box
+  con-000022    E280A1000000000000000022    15L Shipper Box
+  con-000023    E280A1000000000000000023    15L Shipper Box
+  con-000024    E280A1000000000000000024    15L Shipper Box
+  con-000025    E280A1000000000000000025    15L Shipper Box
+  con-000026    E280A1000000000000000026    15L Shipper Box
+  con-000027    E280A1000000000000000027    20L Shipper Box
+  con-000028    E280A1000000000000000028    20L Shipper Box
+  con-000029    E280A1000000000000000029    20L Shipper Box
+  con-000030    E280A1000000000000000030    20L Shipper Box
+  con-000031    E280A1000000000000000031    20L Shipper Box
+  con-000032    E280A1000000000000000032    20L Shipper Box
+  con-000033    E280A1000000000000000033    100L Shipper Box
+  con-000034    E280A1000000000000000034    100L Shipper Box
+  con-000035    E280A1000000000000000035    100L Rotomolded Icebox
+  con-000036    E280A1000000000000000036    100L Rotomolded Icebox
+
+AT loc-fs-hyd (Hyderabad) — 8 containers
+
+  con-000037    E280A1000000000000000037    20L Shipper Box
+  con-000038    E280A1000000000000000038    20L Shipper Box
+  con-000039    E280A1000000000000000039    20L Shipper Box
+  con-000040    E280A1000000000000000040    20L Shipper Box
+  con-000041    E280A1000000000000000041    20L Insulation Bag
+  con-000042    E280A1000000000000000042    20L Insulation Bag
+  con-000043    E280A1000000000000000043    20L Insulation Bag
+  con-000044    E280A1000000000000000044    20L Insulation Bag
+
+AT loc-fs-del (Delhi NCR) — 6 containers
+
+  con-000045    E280A1000000000000000045    40L Shipper Box
+  con-000046    E280A1000000000000000046    40L Shipper Box
+  con-000047    E280A1000000000000000047    40L Shipper Box
+  con-000048    E280A1000000000000000048    50L Blowmolded Ice Box
+  con-000049    E280A1000000000000000049    50L Blowmolded Ice Box
+  con-000050    E280A1000000000000000050    50L Blowmolded Ice Box
+
+AT loc-wh-blr (Warehouse Bangalore) — 6 containers
+
+  con-000051    E280A1000000000000000051    60L Shipper Box
+  con-000052    E280A1000000000000000052    60L Shipper Box
+  con-000053    E280A1000000000000000053    60L Shipper Box
+  con-000054    E280A1000000000000000054    60L Shipper Box
+  con-000055    E280A1000000000000000055    100L Rotomolded Icebox
+  con-000056    E280A1000000000000000056    100L Rotomolded Icebox
+
+AT loc-wh-chn (Warehouse Chennai) — 4 containers
+
+  con-000057    E280A1000000000000000057    20L Shipper Box
+  con-000058    E280A1000000000000000058    20L Shipper Box
+  con-000059    E280A1000000000000000059    20L Shipper Box
+  con-000060    E280A1000000000000000060    20L Shipper Box
+
+
+PACKING RULE:
+  A packing session at station X can only scan containers currently at X.
+  Packing at loc-fs-blr  uses con-000001 .. con-000020
+  Packing at loc-fs-chn  uses con-000021 .. con-000036
+  Packing at loc-fs-hyd  uses con-000037 .. con-000044
+  Packing at loc-fs-del  uses con-000045 .. con-000050
+
+
+────────────────────────────────────────────────────────────────────
+ORDERS (4) — all PENDING_OPS_APPROVAL
+────────────────────────────────────────────────────────────────────
+
+ord-1   ORD-0001   cust-hyperpure    loc-fs-blr
+        items: prd-pcm-pos5 x 4, prd-pcm-neg10 x 2
+
+ord-2   ORD-0002   cust-instamart    loc-fs-blr
+        items: prd-pcm-neg24 x 6
+
+ord-3   ORD-0003   cust-blinkit      loc-fs-del
+        items: prd-pcm-neg18 x 3
+
+ord-4   ORD-0004   cust-medplus      loc-fs-chn
+        items: prd-pcm-pos5 x 8, prd-pcm-neg50 x 2
+
+
+────────────────────────────────────────────────────────────────────
+EXCEPTIONS (1)
+────────────────────────────────────────────────────────────────────
+
+exc-demo-1    UNKNOWN_EPC    WARNING    OPEN
+
+
+────────────────────────────────────────────────────────────────────
+INVENTORY
+────────────────────────────────────────────────────────────────────
+
+50 units of each of the 8 PCM SKUs at each of the 4 Freezing Stations.
+Total: 8 SKUs x 4 stations x 50 = 1600 units in inventory_balances table.
+
+
+────────────────────────────────────────────────────────────────────
+ROW COUNTS
+────────────────────────────────────────────────────────────────────
+
+locations              6
+customers              6
+users                 18
+products               8
+containers            60
+rfid_tags             60
+inventory_balances    32
+orders                 4
+order_items            6
+exceptions             1
+
+
+────────────────────────────────────────────────────────────────────
+QUICK TEST PAYLOADS
+────────────────────────────────────────────────────────────────────
+
+LOGIN (all users, password123):
+  { "email": "admin@tan90.local", "password": "password123" }
+  { "email": "ops@tan90.local", "password": "password123" }
+  { "email": "fsblr@tan90.local", "password": "password123" }
+  { "email": "packer1@tan90.local", "password": "password123" }
+  { "email": "driver1@tan90.local", "password": "password123" }
+  { "email": "blinkit@tan90.local", "password": "password123" }
+
+
+REGISTER NEW CONTAINER (packer at loc-fs-blr):
+  POST /api/containers
+  {
+    "epc": "E280A1000000000000000099",
+    "container_type_code": "SHIP-20",
+    "location_id": "loc-fs-blr"
+  }
+
+
+APPROVE ord-3 (Ops):
+  POST /api/orders/ord-3/approve
+  { "station_id": "loc-fs-del" }
+
+
+SCAN into packing session (Ops):
+  POST /api/packing-sessions/{sid}/scans
+  {
+    "epcs": ["E280A1000000000000000045", "E280A1000000000000000046"]
+  }
+
+
+SET CONTENTS (Ops):
+  PATCH /api/packing-sessions/{sid}/items/con-000045
+  { "contents": [{ "sku": "PCM-NEG18", "qty": 2 }] }
+
+
+DISPATCH (Ops):
+  POST /api/orders/ord-3/dispatch
+  {
+    "driver_id": "usr-driver1",
+    "vehicle_ref": "DL-01-CD-5678",
+    "epcs": ["E280A1000000000000000045", "E280A1000000000000000046"]
+  }
+
+
+CONFIRM RECEIPT (Customer):
+  POST /api/orders/ord-3/confirm-receipt
+  {
+    "received": ["con-000045", "con-000046"],
+    "missing": [],
+    "damaged": []
+  }
+
+
+REQUEST RETURN (Customer):
+  POST /api/orders/ord-3/returns
+  { "container_ids": ["con-000045", "con-000046"] }
+
+
+INSPECT (Ops as FSM):
+  POST /api/orders/ord-3/returns/inspect
+  {
+    "results": [
+      { "container_id": "con-000045", "condition": "OK", "contains_panels": false },
+      { "container_id": "con-000046", "condition": "OK", "contains_panels": false }
+    ]
+  }
+
+
+────────────────────────────────────────────────────────────────────
+RESET TO CLEAN SEED STATE
+────────────────────────────────────────────────────────────────────
+
+  Ctrl+C the uvicorn terminal
+
+  cd C:\Tan90\backend
+  Remove-Item tan90.db
+  python -m app.db.seed
+  uvicorn app.main:app --reload
+
+
+────────────────────────────────────────────────────────────────────
+END OF SEED REFERENCE
+────────────────────────────────────────────────────────────────────

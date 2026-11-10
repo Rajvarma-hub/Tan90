@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.venv/
+.env
+tan90.db
+tan90.db-journal
+tan90.db-wal
+.pytest_cache/
