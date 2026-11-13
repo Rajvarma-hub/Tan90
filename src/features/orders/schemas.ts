@@ -17,20 +17,38 @@ export const createOrderSchema = z.object({
     .min(1, "Add at least one item"),
 });
 
+const scannedCodes = z.array(z.string().trim().min(1).max(64)).min(1).max(500);
+
+export const scanIntoPackingSchema = z.object({
+  orderId: id,
+  code: z.string().trim().min(1).max(64),
+});
+
 export const orderActionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("approve"), orderId: id, stationId: id }),
   z.object({ action: z.literal("cancel"), orderId: id }),
   z.object({ action: z.literal("start_packing"), orderId: id }),
+  z.object({ action: z.literal("remove_container"), orderId: id, containerId: id }),
   z.object({
-    action: z.literal("pack"),
+    action: z.literal("complete_packing"),
     orderId: id,
-    epcs: z.array(z.string()).max(100),
+    // What went into each scanned container.
+    contents: z.array(
+      z.object({
+        containerId: id,
+        lines: z.array(
+          z.object({ sku: z.string().min(1), qty: z.number().int().min(0).max(10_000) }),
+        ),
+      }),
+    ),
   }),
   z.object({
     action: z.literal("dispatch"),
     orderId: id,
     driverId: id,
     vehicleRef: z.string().trim().min(1).max(64),
+    // Container codes or tag IDs scanned while loading the vehicle.
+    codes: scannedCodes,
   }),
   z.object({ action: z.literal("depart"), orderId: id }),
   z.object({ action: z.literal("arrive"), orderId: id }),
@@ -48,7 +66,7 @@ export const orderActionSchema = z.discriminatedUnion("action", [
     orderId: id,
     driverId: id,
   }),
-  z.object({ action: z.literal("collect_return"), orderId: id }),
+  z.object({ action: z.literal("collect_return"), orderId: id, codes: scannedCodes }),
   z.object({ action: z.literal("receive_return"), orderId: id }),
   z.object({
     action: z.literal("inspect"),

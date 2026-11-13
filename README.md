@@ -42,6 +42,10 @@ If you don't have a `.env.local` yet, create one from [.env.example](.env.exampl
 - **Orders** (`/orders`): searchable, filterable list; create an order; order page with customer, station, items, containers and activity, plus the next step for the order's status: approve or cancel, start packing, pack containers, dispatch with driver and vehicle, depart, arrive, deliver, confirm receipt, request return, assign return driver, collect, receive, inspect and close.
 - **Inventory** (`/inventory`): asset list with stock totals and add-asset; stock per station; movements timeline with inward/outward, type, station and asset filters; record new inventory, damage, adjustments and station-to-station transfers; freezing stations with stock, free containers and open orders.
 - Dispatching an order takes its panels out of the station's stock and records a Sales movement.
+- **Asset Management** (`/assets`): every container with its status, where it is and the order it is linked to; counts of what is in stock, out, coming back and damaged; register a container by scanning its tag; container page with order history, movement history and tag replacement.
+- **Scanning.** Scan boxes accept a barcode or RFID scanner (it types the code and presses Enter) or a typed code. A scan can be the tag ID or the container code on the label (`CON-000016`). Containers are linked to an order by scanning them into its packing session; several containers can be on one order. Dispatch, driver loading and return pickup are verified by scanning the order's containers.
+- **Deliveries** (`/deliveries`): open deliveries and return pickups per driver, with load, depart, arrive, deliver and collect steps.
+- **Exceptions** (`/exceptions`): unknown scans and containers reported missing or damaged, with resolve.
 
 ## Project structure
 
@@ -53,14 +57,14 @@ backend/                 # FastAPI + SQLite API (Python)
 │   ├── models/          # SQLAlchemy models
 │   ├── routers/         # One file per API area (orders, inventory, stations, ...)
 │   ├── schemas/         # Pydantic request/response shapes
-│   └── services/        # order_flow (order lifecycle), inventory (stock ledger)
+│   └── services/        # order_flow (lifecycle), inventory (stock ledger), scan, container_view
 ├── API.md               # Endpoint-by-endpoint API reference
 ├── guide.txt            # Seeded users, stations, products and sample payloads
 └── test.py              # End-to-end endpoint test (expects the API on :8000)
 
 src/                     # Next.js portal
 ├── app/                 # Routing only: layouts, pages, route handlers, special files
-│   ├── (portal)/        # App shell + /orders, /orders/[id], /inventory/{assets,movements,stations}
+│   ├── (portal)/        # App shell + /orders, /inventory/*, /assets, /deliveries, /exceptions
 │   ├── api/             # Route handlers (e.g. /api/health)
 │   └── layout.tsx       # Root layout: <html>, fonts, metadata
 ├── components/
@@ -69,7 +73,10 @@ src/                     # Next.js portal
 ├── config/              # Validated env, site config, sidebar navigation
 ├── features/            # Domain modules, one folder per feature
 │   ├── orders/          # List, new order, detail page and every lifecycle action
-│   └── inventory/       # Assets, stock per station, movements, freezing stations
+│   ├── inventory/       # Assets, stock per station, movements, freezing stations
+│   ├── containers/      # Asset Management: container register, scan checklist, tag replacement
+│   ├── deliveries/      # Driver board
+│   └── exceptions/      # Unknown scans, missing and damaged containers
 ├── hooks/               # Shared client hooks (useServerAction)
 ├── lib/                 # Isomorphic utilities: AppError, ActionResult, formatting
 └── server/              # Server-only: backend.ts (API client), createAction, logger

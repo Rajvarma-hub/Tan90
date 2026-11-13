@@ -10,6 +10,7 @@ from app.models.order import Order
 from app.models.rfid import RFIDTag
 from app.models.user import User
 from app.schemas.delivery import DeliveryScanIn, GPSIn
+from app.services.scan import to_epcs
 
 router = APIRouter(prefix="/api/deliveries", tags=["deliveries"])
 
@@ -54,7 +55,7 @@ def scan_delivery(task_id: str, payload: DeliveryScanIn,
     if not task:
         raise HTTPException(404, "Task not found")
     matched, unknown = [], []
-    for epc in payload.epcs:
+    for epc in to_epcs(db, payload.epcs):
         tag = db.query(RFIDTag).filter(
             RFIDTag.epc == epc, RFIDTag.active == True).first()  # noqa: E712
         if not tag:

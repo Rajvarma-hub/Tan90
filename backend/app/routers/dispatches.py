@@ -17,6 +17,7 @@ from app.models.user import User
 from app.schemas.dispatch import (
     DispatchCreate, DispatchStatusUpdate, DispatchVerifyIn,
 )
+from app.services.scan import to_epcs
 
 router = APIRouter(prefix="/api/dispatches", tags=["dispatches"])
 
@@ -129,7 +130,7 @@ def verify_dispatch(
 
     matched, unexpected, unknown = [], [], []
 
-    for epc in payload.epcs:
+    for epc in to_epcs(db, payload.epcs):
         tag = db.query(RFIDTag).filter(
             RFIDTag.epc == epc, RFIDTag.active == True  # noqa: E712
         ).first()

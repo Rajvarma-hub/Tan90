@@ -13,6 +13,10 @@ from app.models.container import Container
 from app.models.location import Location
 from app.models.rfid import RFIDTag
 from app.models.user import User
+from app.models.dispatch import Dispatch
+from app.models.packing import PackingSession
+from app.services import container_view
+from app.services.scan import resolve_scan
 from app.schemas.container import (
     ContainerOut, ContainerRegisterRequest, ReplaceTagRequest,
 )
@@ -40,16 +44,7 @@ def _container_dict(db: Session, c: Container) -> dict:
     tag = db.query(RFIDTag).filter(
         RFIDTag.container_id == c.id, RFIDTag.active == True  # noqa: E712
     ).first()
-    return {
-        "id": c.id,
-        "container_code": c.container_code,
-        "container_type": c.container_type,
-        "capacity_litres": float(c.capacity_litres),
-        "status": c.status,
-        "current_location_id": c.current_location_id,
-        "current_customer_id": c.current_customer_id,
-        "epc": tag.epc if tag else None,
-    }
+    return container_view.describe(db, [c])[0]
 
 
 # ─── Reference data ────────────────────────────────────────────────
@@ -175,7 +170,34 @@ def replace_tag(
 
 # ─── Read endpoints ────────────────────────────────────────────────
 
-# /me MUST come before /{container_id} so FastAPI does not treat "me" as an ID.
+# Fixed paths MUST come before /{container_id} so FastAPI does not treat them as an ID.
+
+@router.get("/summary")
+def container_summary(user: User = Depends(get_current_user),
+                      db: Session = Depends(get_db)):
+    """Counts by status, overall and per location — the 'what is in, what is out' view."""
+    if user.role == "CUSTOMER":
+        raise HTTPException(403, "Insufficient permissions")
+    by_status: dict[str, int] = {}
+    for status, count in db.query(
+            Container.status, func.count(Container.id)).group_by(Container.status).all():
+        by_status[status] = count
+    return {"total": sum(by_status.values()), "by_status": by_status}
+
+
+@router.get("/lookup", response_model=ContainerOut)
+def lookup_container(code: str, user: User = Depends(get_current_user),
+                     db: Session = Depends(get_db)):
+    """Resolve a scan — RFID tag ID or the container code on the barcode label."""
+    if user.role == "CUSTOMER":
+        raise HTTPException(403, "Insufficient permissions")
+    c = resolve_scan(db, code)
+    if not c:
+        raise HTTPException(404, f"No container matches '{code.strip()}'")
+    return _container_dict(db, c)
+
+
+
 @router.get("/me", response_model=list[ContainerOut])
 def my_containers(user: User = Depends(get_current_user),
                   db: Session = Depends(get_db)):
@@ -213,7 +235,7 @@ def list_containers(
         q = q.filter(Container.current_location_id == user.location_id)
 
     rows = q.order_by(Container.container_code).all()
-    return [_container_dict(db, c) for c in rows]
+    return container_view.describe(db, rows)
 
 
 @router.get("/{container_id}", response_model=ContainerOut)
@@ -241,3 +263,65 @@ def container_history(container_id: str, user: User = Depends(get_current_user),
          "occurred_at": m.occurred_at}
         for m in rows
     ]
+
+
+@router.get("/{container_id}/detail")
+def container_detail(container_id: str, user: User = Depends(get_current_user),
+                     db: Session = Depends(get_db)):
+    """Container page: where it is, every order it has been on, and its movement log."""
+    if user.role == "CUSTOMER":
+        raise HTTPException(403, "Insufficient permissions")
+    c = db.get(Container, container_id)
+    if not c:
+        raise HTTPException(404, "Container not found")
+
+    locations = {loc.id: loc.code for loc in db.query(Location).all()}
+    moves = db.query(ContainerMovement).filter(
+        ContainerMovement.container_id == container_id
+    ).order_by(ContainerMovement.occurred_at.desc()).all()
+    actors = {
+        u.id: u.full_name for u in db.query(User).filter(
+            User.id.in_({m.actor_id for m in moves if m.actor_id})).all()
+    }
+
+    def order_of(m: ContainerMovement) -> str | None:
+        if m.reference_type == "ORDER":
+            return m.reference_id
+        if m.reference_type == "PACKING_SESSION":
+            ps = db.get(PackingSession, m.reference_id)
+            return ps.order_id if ps else None
+        if m.reference_type == "DISPATCH":
+            d = db.get(Dispatch, m.reference_id)
+            return d.order_id if d else None
+        return None
+
+    from app.models.order import Order
+    history = []
+    for m in moves:
+        oid = order_of(m)
+        o = db.get(Order, oid) if oid else None
+        history.append({
+            "id": m.id, "from_status": m.from_status, "to_status": m.to_status,
+            "reason": m.reason,
+            "from_location": locations.get(m.from_location_id),
+            "to_location": locations.get(m.to_location_id),
+            "order_id": o.id if o else None,
+            "order_number": o.order_number if o else None,
+            "actor_name": actors.get(m.actor_id),
+            "occurred_at": m.occurred_at,
+        })
+
+    from app.models.customer import Customer
+    orders = container_view.orders_by_container(db, [c.id]).get(c.id, [])
+    customers = {cust.id: cust.name for cust in db.query(Customer).all()}
+    return {
+        **_container_dict(db, c),
+        "created_at": c.created_at,
+        "orders": [
+            {"id": o.id, "order_number": o.order_number, "status": o.status,
+             "customer_name": customers.get(o.customer_id),
+             "created_at": o.created_at}
+            for o in orders
+        ],
+        "history": history,
+    }

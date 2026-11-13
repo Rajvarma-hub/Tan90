@@ -18,6 +18,12 @@ class ContainerOut(BaseModel):
     current_location_id: str | None
     current_customer_id: str | None
     epc: str | None = None
+    # Resolved for the portal
+    location_code: str | None = None
+    location_name: str | None = None
+    customer_name: str | None = None
+    # The order this container is packed for / out on, if any.
+    current_order: dict | None = None
 
 
 class ReplaceTagRequest(BaseModel):

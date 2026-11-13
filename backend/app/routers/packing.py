@@ -15,6 +15,7 @@ from app.models.rfid import RFIDScanEvent, RFIDScanSession, RFIDTag
 from app.models.user import User
 from app.schemas.packing import PackingItemContentsIn, PackingScanIn, PackingScanResult
 from app.services import order_flow
+from app.services.scan import resolve_scan
 
 router = APIRouter(prefix="/api", tags=["packing"])
 
@@ -45,9 +46,9 @@ def scan_packing(session_id: str, payload: PackingScanIn,
 
     added, duplicates, unknown, unavailable = [], [], [], []
     for epc in payload.epcs:
-        tag = db.query(RFIDTag).filter(
-            RFIDTag.epc == epc, RFIDTag.active == True).first()  # noqa: E712
-        if not tag:
+        # A scan is a tag ID or the container code on the barcode label.
+        c = resolve_scan(db, epc)
+        if not c:
             unknown.append(epc)
             db.add(RFIDScanEvent(session_id=scan_session.id, epc=epc))
             db.add(ExceptionRecord(
@@ -55,10 +56,6 @@ def scan_packing(session_id: str, payload: PackingScanIn,
                 reference_type="PACKING_SESSION", reference_id=session.id,
                 details_json=json.dumps({"epc": epc}),
             ))
-            continue
-        c = db.get(Container, tag.container_id)
-        if not c:
-            unknown.append(epc)
             continue
         already = db.query(PackingItem).filter(
             PackingItem.session_id == session.id, PackingItem.container_id == c.id,
@@ -115,3 +112,32 @@ def complete_packing(session_id: str,
                      db: Session = Depends(get_db)):
     order = order_flow.complete_packing(db, session_id, user)
     return {"order_id": order.id, "status": order.status}
+
+
+@router.delete("/packing-sessions/{session_id}/items/{container_id}")
+def remove_item(session_id: str, container_id: str,
+                user: User = Depends(require_roles(*PACK_ROLES)),
+                db: Session = Depends(get_db)):
+    """Undo a scan: take a container out of an open session and free it again."""
+    session = db.get(PackingSession, session_id)
+    if not session or session.status != "OPEN":
+        raise HTTPException(409, "Session not open")
+    item = db.query(PackingItem).filter(
+        PackingItem.session_id == session_id,
+        PackingItem.container_id == container_id,
+    ).first()
+    if not item:
+        raise HTTPException(404, "Item not found in this session")
+    c = db.get(Container, container_id)
+    if c and c.status == "PACKING":
+        db.add(ContainerMovement(
+            container_id=c.id, from_status=c.status, to_status="AVAILABLE",
+            from_location_id=c.current_location_id,
+            to_location_id=c.current_location_id,
+            reason="PACKING_REMOVED", reference_type="PACKING_SESSION",
+            reference_id=session.id, actor_id=user.id,
+        ))
+        c.status = "AVAILABLE"
+    db.delete(item)
+    db.commit()
+    return {"container_id": container_id, "removed": True}

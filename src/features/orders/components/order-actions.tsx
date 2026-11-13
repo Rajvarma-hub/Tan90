@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Field, FormError, Input, Select } from "@/components/ui/form";
+import { ScanChecklist } from "@/features/containers/components/scan-checklist";
 import { runOrderAction } from "@/features/orders/actions";
 import type { OrderActionInput } from "@/features/orders/schemas";
 import type { OrderActionOptions, OrderDetail } from "@/features/orders/types";
@@ -12,8 +13,8 @@ import { useServerAction } from "@/hooks/use-server-action";
 type DialogName =
   | "approve"
   | "cancel"
-  | "pack"
   | "dispatch"
+  | "collect"
   | "confirm"
   | "assign"
   | "inspect"
@@ -38,7 +39,7 @@ export function OrderActions({
 
   // Dialog form state
   const [stationId, setStationId] = useState(order.station?.id ?? "");
-  const [selectedEpcs, setSelectedEpcs] = useState<string[]>([]);
+  const [scannedCodes, setScannedCodes] = useState<string[]>([]);
   const [driverId, setDriverId] = useState("");
   const [vehicleRef, setVehicleRef] = useState("");
   const [receipt, setReceipt] = useState<Record<string, string>>({});
@@ -47,11 +48,13 @@ export function OrderActions({
 
   function open(name: DialogName) {
     clearError();
+    setScannedCodes([]);
     setDialog(name);
   }
   const close = () => setDialog(null);
   const act = (input: OrderActionInput) => run(input);
 
+  const toCollect = order.containers.filter((c) => c.status === "RETURN_REQUESTED");
   const toInspect = order.containers.filter(
     (c) => c.status === "IN_TRANSIT_TO_STATION",
   );
@@ -88,11 +91,10 @@ export function OrderActions({
       );
       break;
     case "PACKING":
-      hint = "Packing in progress. Scan containers and complete the packing session.";
-      buttons = <Button onClick={() => open("pack")}>Pack Containers</Button>;
+      hint = "Packing in progress. Scan containers below and complete the packing session.";
       break;
     case "PACKED":
-      hint = "Packed and ready. Assign a driver and vehicle to dispatch.";
+      hint = "Packed and ready. Scan the containers onto the vehicle and assign a driver.";
       buttons = <Button onClick={() => open("dispatch")}>Dispatch Order</Button>;
       break;
     case "DISPATCHED":
@@ -145,12 +147,7 @@ export function OrderActions({
       buttons = (
         <>
           {order.return_driver && (
-            <Button
-              disabled={pending}
-              onClick={() => act({ action: "collect_return", orderId })}
-            >
-              Mark Collected
-            </Button>
+            <Button onClick={() => open("collect")}>Collect Containers</Button>
           )}
           <Button
             variant={order.return_driver ? "outline" : "primary"}
@@ -190,7 +187,7 @@ export function OrderActions({
       break;
   }
 
-  const dialogFooter = (label: string, onSubmit?: () => void) => (
+  const dialogFooter = (label: string, onSubmit?: () => void, blocked = false) => (
     <>
       <FormError message={error} />
       <div className="flex justify-end gap-2">
@@ -199,7 +196,7 @@ export function OrderActions({
         </Button>
         <Button
           type={onSubmit ? "button" : "submit"}
-          disabled={pending}
+          disabled={pending || blocked}
           onClick={onSubmit}
         >
           {pending ? "Working…" : label}
@@ -280,68 +277,19 @@ export function OrderActions({
       </Dialog>
 
       <Dialog
-        open={dialog === "pack"}
-        onClose={close}
-        title="Pack Containers"
-        description={`Pick the containers at ${order.station?.code ?? "the station"} to pack. The ordered panels are split evenly across them.`}
-      >
-        <div className="grid gap-4">
-          {order.containers.length > 0 && (
-            <p className="text-sm text-muted-foreground">
-              Already scanned:{" "}
-              {order.containers.map((c) => c.container_code).join(", ")}
-            </p>
-          )}
-          {options.availableContainers.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No more containers are available at this station.
-            </p>
-          ) : (
-            <ul className="grid max-h-64 gap-1 overflow-y-auto rounded-md border p-2">
-              {options.availableContainers.map((container) => (
-                <li key={container.epc}>
-                  <label className="flex cursor-pointer items-center gap-3 rounded px-2 py-1.5 text-sm hover:bg-accent">
-                    <input
-                      type="checkbox"
-                      className="size-4 accent-[var(--primary)]"
-                      checked={selectedEpcs.includes(container.epc)}
-                      onChange={(event) =>
-                        setSelectedEpcs((current) =>
-                          event.target.checked
-                            ? [...current, container.epc]
-                            : current.filter((epc) => epc !== container.epc),
-                        )
-                      }
-                    />
-                    <span className="text-card-foreground">{container.label}</span>
-                    <span className="ml-auto font-mono text-xs text-muted-foreground">
-                      …{container.epc.slice(-6)}
-                    </span>
-                  </label>
-                </li>
-              ))}
-            </ul>
-          )}
-          {dialogFooter(
-            `Pack ${selectedEpcs.length + order.containers.length} container(s)`,
-            () => act({ action: "pack", orderId, epcs: selectedEpcs }),
-          )}
-        </div>
-      </Dialog>
-
-      <Dialog
         open={dialog === "dispatch"}
         onClose={close}
         title="Dispatch Order"
-        description={`${order.containers.length} packed container(s) will be loaded. Stock leaves ${order.station?.code ?? "the station"} on dispatch.`}
+        description={`Scan each packed container as it is loaded. Stock leaves ${order.station?.code ?? "the station"} on dispatch.`}
       >
         <form
           className="grid gap-4"
           onSubmit={(event) => {
             event.preventDefault();
-            act({ action: "dispatch", orderId, driverId, vehicleRef });
+            act({ action: "dispatch", orderId, driverId, vehicleRef, codes: scannedCodes });
           }}
         >
+          <ScanChecklist containers={order.containers} onChange={setScannedCodes} />
           <Field label="Driver">
             <Select
               required
@@ -365,7 +313,7 @@ export function OrderActions({
               onChange={(event) => setVehicleRef(event.target.value)}
             />
           </Field>
-          {dialogFooter("Dispatch")}
+          {dialogFooter("Dispatch", undefined, scannedCodes.length !== order.containers.length)}
         </form>
       </Dialog>
 
@@ -465,6 +413,22 @@ export function OrderActions({
           </Field>
           {dialogFooter("Assign Driver")}
         </form>
+      </Dialog>
+
+      <Dialog
+        open={dialog === "collect"}
+        onClose={close}
+        title="Collect Containers"
+        description="Scan each container as the driver picks it up from the customer."
+      >
+        <div className="grid gap-4">
+          <ScanChecklist containers={toCollect} onChange={setScannedCodes} />
+          {dialogFooter(
+            "Mark Collected",
+            () => act({ action: "collect_return", orderId, codes: scannedCodes }),
+            scannedCodes.length !== toCollect.length,
+          )}
+        </div>
       </Dialog>
 
       <Dialog

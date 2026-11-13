@@ -80,7 +80,7 @@ function describeError(body: unknown, status: number): string {
 
 export async function backend<T>(
   path: string,
-  options: { method?: "GET" | "POST" | "PATCH"; body?: unknown } = {},
+  options: { method?: "GET" | "POST" | "PATCH" | "DELETE"; body?: unknown } = {},
 ): Promise<T> {
   // Backend data is always live: opt the caller out of prerendering.
   await connection();

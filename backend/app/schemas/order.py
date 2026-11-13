@@ -32,6 +32,8 @@ class OrderOut(BaseModel):
     status: str
     expected_delivery_at: datetime | None
     created_at: datetime
+    driver_id: str | None = None
+    return_driver_id: str | None = None
     items: list[OrderItemOut] = []
     class Config:
         from_attributes = True

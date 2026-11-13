@@ -1,6 +1,10 @@
 "use server";
 
-import { createOrderSchema, orderActionSchema } from "@/features/orders/schemas";
+import {
+  createOrderSchema,
+  orderActionSchema,
+  scanIntoPackingSchema,
+} from "@/features/orders/schemas";
 import * as orders from "@/features/orders/service";
 import { createAction } from "@/server/action";
 import { backend } from "@/server/backend";
@@ -24,6 +28,11 @@ export const createOrder = createAction(createOrderSchema, async (input) => {
   return { id: order.id };
 });
 
+// Returns the scan outcome rather than failing, so the packer sees why a scan was not added.
+export const scanIntoPacking = createAction(scanIntoPackingSchema, ({ orderId, code }) =>
+  orders.scanIntoPacking(orderId, code),
+);
+
 // One entry point for every step in the order lifecycle.
 export const runOrderAction = createAction(orderActionSchema, async (input) => {
   const { orderId } = input;
@@ -37,11 +46,14 @@ export const runOrderAction = createAction(orderActionSchema, async (input) => {
     case "start_packing":
       await orders.postOrderStep(orderId, "packing-sessions");
       break;
-    case "pack":
-      await orders.packOrder(orderId, input.epcs);
+    case "remove_container":
+      await orders.removeFromPacking(orderId, input.containerId);
+      break;
+    case "complete_packing":
+      await orders.completePacking(orderId, input.contents);
       break;
     case "dispatch":
-      await orders.dispatchOrder(orderId, input.driverId, input.vehicleRef);
+      await orders.dispatchOrder(orderId, input.driverId, input.vehicleRef, input.codes);
       break;
     case "depart":
     case "arrive":
@@ -60,7 +72,7 @@ export const runOrderAction = createAction(orderActionSchema, async (input) => {
       });
       break;
     case "collect_return":
-      await orders.collectReturn(orderId);
+      await orders.collectReturn(orderId, input.codes);
       break;
     case "receive_return":
       await orders.postOrderStep(orderId, "returns/receive");

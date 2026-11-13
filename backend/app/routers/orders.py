@@ -19,6 +19,7 @@ from app.schemas.order_flow import (
     VerifyQRIn, AssignReturnDriverIn, CollectReturnIn, InspectAndCloseIn,
 )
 from app.services import order_flow
+from app.services.scan import to_epcs
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
 
@@ -159,7 +160,7 @@ def dispatch_order(order_id: str, payload: DispatchIn,
                    db: Session = Depends(get_db)):
     return order_flow.dispatch_order(
         db, order_id, driver_id=payload.driver_id,
-        vehicle_ref=payload.vehicle_ref, epcs=payload.epcs, actor=user,
+        vehicle_ref=payload.vehicle_ref, epcs=to_epcs(db, payload.epcs), actor=user,
     )
 
 
@@ -182,7 +183,7 @@ def assign_return_driver(order_id: str, payload: AssignReturnDriverIn,
 def collect_return(order_id: str, payload: CollectReturnIn,
                    user: User = Depends(require_roles("DRIVER", "OPERATIONS_ADMIN", "SUPER_ADMIN")),
                    db: Session = Depends(get_db)):
-    return order_flow.collect_return(db, order_id, payload.epcs, user)
+    return order_flow.collect_return(db, order_id, to_epcs(db, payload.epcs), user)
 
 
 @router.post("/{order_id}/returns/receive")

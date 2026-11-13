@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, Detail, EmptyState } from "@/components/ui/card";
 import { Table, Td, Th } from "@/components/ui/table";
+import { ContainerStatusBadge } from "@/features/containers/components/container-status-badge";
 import { OrderActions } from "@/features/orders/components/order-actions";
+import { PackingPanel } from "@/features/orders/components/packing-panel";
 import { OrderProgress } from "@/features/orders/components/order-progress";
 import { OrderStatusBadge } from "@/features/orders/components/order-status-badge";
 import type { OrderActionOptions, OrderDetail } from "@/features/orders/types";
@@ -35,6 +36,7 @@ export function OrderDetailView({
       <OrderProgress status={order.status} />
       {/* Keyed so dialog state resets after each step. */}
       <OrderActions key={order.status} order={order} options={options} />
+      {order.status === "PACKING" && <PackingPanel order={order} options={options} />}
 
       <Card>
         <CardHeader title="Basic Information" />
@@ -111,7 +113,7 @@ export function OrderDetailView({
       <Card>
         <CardHeader
           title={`Containers (${order.containers.length})`}
-          description="RFID-tagged containers packed for this order."
+          description="Containers linked to this order. Each one is tracked from packing to return."
         />
         {order.containers.length === 0 ? (
           <EmptyState>No containers packed yet.</EmptyState>
@@ -129,7 +131,12 @@ export function OrderDetailView({
               {order.containers.map((container) => (
                 <tr key={container.container_id}>
                   <Td>
-                    <div className="font-medium">{container.container_code}</div>
+                    <Link
+                      href={`/assets/${container.container_id}`}
+                      className="font-medium hover:text-primary hover:underline"
+                    >
+                      {container.container_code}
+                    </Link>
                     <div className="font-mono text-xs text-muted-foreground">
                       {container.epc ?? "No tag"}
                     </div>
@@ -143,7 +150,7 @@ export function OrderDetailView({
                           .join(", ")}
                   </Td>
                   <Td>
-                    <Badge>{humanize(container.status)}</Badge>
+                    <ContainerStatusBadge status={container.status} />
                   </Td>
                 </tr>
               ))}

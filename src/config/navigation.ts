@@ -1,5 +1,12 @@
 import type { Route } from "next";
-import { Boxes, Package, Warehouse, type LucideIcon } from "lucide-react";
+import {
+  Boxes,
+  Package,
+  TriangleAlert,
+  Truck,
+  Warehouse,
+  type LucideIcon,
+} from "lucide-react";
 
 export type NavItem = {
   title: string;
@@ -21,6 +28,8 @@ export const mainNav: NavItem[] = [
     ],
   },
   { title: "Asset Management", href: "/assets", icon: Boxes },
+  { title: "Deliveries", href: "/deliveries", icon: Truck },
+  { title: "Exceptions", href: "/exceptions", icon: TriangleAlert },
 ];
 
 export function isActivePath(pathname: string, href: string) {
