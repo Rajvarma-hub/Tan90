@@ -21,6 +21,7 @@ from app.models.packing import PackingItem, PackingSession
 from app.models.qr import QRToken
 from app.models.rfid import RFIDTag
 from app.models.user import User
+from app.services import inventory as inventory_service
 from app.services import notifications as notif
 
 
@@ -174,6 +175,17 @@ def approve_order(db: Session, order_id: str, *, station_id: str, actor: User) -
     return order
 
 
+def cancel_order(db: Session, order_id: str, actor: User) -> Order:
+    """Ops can cancel before packing starts, so no containers or stock are involved."""
+    order = db.get(Order, order_id)
+    if not order:
+        raise HTTPException(404, "Order not found")
+    _transition(db, order, "cancel", actor)
+    db.commit()
+    db.refresh(order)
+    return order
+
+
 def start_packing(db: Session, order_id: str, actor: User) -> PackingSession:
     order = db.get(Order, order_id)
     if not order:
@@ -289,6 +301,14 @@ def dispatch_order(db: Session, order_id: str, *, driver_id: str, vehicle_ref: s
         db.add(DispatchItem(dispatch_id=dispatch.id, container_id=c.id))
         _move_container(db, c, "IN_TRANSIT_TO_CUSTOMER", "DISPATCHED",
                         "DISPATCH", dispatch.id, actor.id)
+
+    # Ordered panels leave the station's stock when the vehicle is loaded.
+    if order.station_id:
+        for item in order.items:
+            inventory_service.apply_movement(
+                db, product_id=item.product_id, location_id=order.station_id,
+                delta=-item.quantity, reason="SALES",
+                reference_type="ORDER", reference_id=order.id, actor_id=actor.id)
 
     task = DeliveryTask(dispatch_id=dispatch.id, driver_id=driver_id, status="ASSIGNED")
     db.add(task)
@@ -426,8 +446,12 @@ def confirm_receipt(db: Session, order_id: str, *, received: list[str],
     order = db.get(Order, order_id)
     if not order:
         raise HTTPException(404, "Order not found")
-    if actor.role != "CUSTOMER" or actor.customer_id != order.customer_id:
-        raise HTTPException(403, "Not your order")
+    # Ops/Admin may confirm on the customer's behalf (e.g. signed paper POD).
+    if actor.role == "CUSTOMER":
+        if actor.customer_id != order.customer_id:
+            raise HTTPException(403, "Not your order")
+    elif actor.role not in ("SUPER_ADMIN", "OPERATIONS_ADMIN"):
+        raise HTTPException(403, "Not allowed")
 
     all_expected = {c.id for c in _containers_for_order(db, order_id)}
     reported = set(received) | set(missing) | set(damaged)

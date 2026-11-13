@@ -23,7 +23,7 @@ from app.models.container import Container
 from app.models.customer import Customer
 from app.models.delivery import DeliveryScan, DeliveryTask, GPSEvent
 from app.models.dispatch import Dispatch, DispatchItem
-from app.models.inventory import InventoryBalance
+from app.models.inventory import InventoryBalance, InventoryMovement
 from app.models.location import Location
 from app.models.notification import Notification
 from app.models.order import Order, OrderItem
@@ -132,6 +132,10 @@ def step_scan(db, order, sess, containers_and_contents, actor, at):
             "PACKING_SESSION", sess.id, actor, at)
         db.add(PackingItem(session_id=sess.id, container_id=c.id,
                            contents_json=json.dumps(contents)))
+    # The session has autoflush off, so later steps that walk sess.items would
+    # see an empty list and leave these containers stuck in PACKING.
+    db.flush()
+    db.expire(sess, ["items"])
 
 
 def step_complete_packing(db, order, sess, actor, at):
@@ -446,6 +450,12 @@ def seed_inventory(db: Session):
             db.add(InventoryBalance(
                 id=f"inv-{loc}-{pid}", product_id=pid,
                 location_id=loc, quantity=50,
+            ))
+            db.add(InventoryMovement(
+                product_id=pid, location_id=loc, delta=50,
+                reason="NEW_INVENTORY", reference_type="MANUAL",
+                reference_id="Opening stock", actor_id="usr-ops1",
+                occurred_at=ago(days=20),
             ))
 
 

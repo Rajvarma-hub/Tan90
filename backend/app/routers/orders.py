@@ -95,6 +95,13 @@ def approve(order_id: str, payload: ApproveIn,
     return order_flow.approve_order(db, order_id, station_id=payload.station_id, actor=user)
 
 
+@router.post("/{order_id}/cancel")
+def cancel(order_id: str,
+           user: User = Depends(require_roles("SUPER_ADMIN", "OPERATIONS_ADMIN")),
+           db: Session = Depends(get_db)):
+    return order_flow.cancel_order(db, order_id, user)
+
+
 @router.post("/{order_id}/depart")
 def depart(order_id: str,
            user: User = Depends(require_roles("DRIVER", "SUPER_ADMIN", "OPERATIONS_ADMIN")),
@@ -135,7 +142,8 @@ def verify_qr(order_id: str, payload: VerifyQRIn,
 
 @router.post("/{order_id}/confirm-receipt")
 def confirm_receipt(order_id: str, payload: ConfirmReceiptIn,
-                    user: User = Depends(require_roles("CUSTOMER")),
+                    user: User = Depends(require_roles(
+                        "CUSTOMER", "SUPER_ADMIN", "OPERATIONS_ADMIN")),
                     db: Session = Depends(get_db)):
     return order_flow.confirm_receipt(
         db, order_id, received=payload.received, missing=payload.missing,
@@ -226,4 +234,94 @@ def get_manifest(order_id: str, user: User = Depends(get_current_user),
         "customer_id": order.customer_id,
         "session": {"id": session.id, "status": session.status},
         "containers": out,
+    }
+
+
+# ─── Portal detail view ─────────────────────────────────────────
+
+@router.get("/{order_id}/detail")
+def order_detail(order_id: str, user: User = Depends(get_current_user),
+                 db: Session = Depends(get_db)):
+    """Everything the order page needs in one call, with names resolved."""
+    from app.models.customer import Customer
+    from app.models.location import Location
+    from app.models.product import Product
+
+    order = db.get(Order, order_id)
+    if not order:
+        raise HTTPException(404, "Order not found")
+    if user.role == "CUSTOMER" and order.customer_id != user.customer_id:
+        raise HTTPException(403, "Access denied")
+
+    customer = db.get(Customer, order.customer_id)
+    station = db.get(Location, order.station_id) if order.station_id else None
+
+    def person(uid: str | None):
+        u = db.get(User, uid) if uid else None
+        return {"id": u.id, "full_name": u.full_name, "email": u.email} if u else None
+
+    items = []
+    for it in order.items:
+        p = db.get(Product, it.product_id)
+        items.append({
+            "id": it.id, "product_id": it.product_id, "quantity": it.quantity,
+            "sku": p.sku if p else None, "product_name": p.name if p else it.product_id,
+            "setpoint_c": p.setpoint_c if p else None,
+        })
+
+    session = db.query(PackingSession).filter(
+        PackingSession.order_id == order_id
+    ).order_by(PackingSession.created_at.desc()).first()
+    containers = []
+    if session:
+        for pi in db.query(PackingItem).filter(PackingItem.session_id == session.id).all():
+            c = db.get(Container, pi.container_id)
+            if not c:
+                continue
+            tag = db.query(RFIDTag).filter(
+                RFIDTag.container_id == c.id, RFIDTag.active == True).first()  # noqa: E712
+            containers.append({
+                "container_id": c.id, "container_code": c.container_code,
+                "container_type": c.container_type, "status": c.status,
+                "epc": tag.epc if tag else None,
+                "contents": json.loads(pi.contents_json),
+            })
+
+    dispatch = db.query(Dispatch).filter(
+        Dispatch.order_id == order_id
+    ).order_by(Dispatch.confirmed_at.desc()).first()
+
+    events = db.query(OrderEvent).filter(
+        OrderEvent.order_id == order_id).order_by(OrderEvent.occurred_at).all()
+    actor_names = {
+        u.id: u.full_name for u in db.query(User).filter(
+            User.id.in_({e.actor_id for e in events if e.actor_id})).all()
+    }
+
+    return {
+        "id": order.id, "order_number": order.order_number, "status": order.status,
+        "destination": order.destination,
+        "expected_delivery_at": order.expected_delivery_at,
+        "created_at": order.created_at,
+        "customer": {
+            "id": customer.id, "name": customer.name,
+            "contact_email": customer.contact_email,
+            "contact_phone": customer.contact_phone, "address": customer.address,
+        } if customer else None,
+        "station": {
+            "id": station.id, "code": station.code, "name": station.name,
+            "address": station.address,
+        } if station else None,
+        "items": items,
+        "packing_session": {"id": session.id, "status": session.status} if session else None,
+        "containers": containers,
+        "driver": person(order.driver_id),
+        "vehicle_ref": dispatch.vehicle_ref if dispatch else None,
+        "return_driver": person(order.return_driver_id),
+        "history": [
+            {"id": e.id, "action": e.action, "from": e.from_status, "to": e.to_status,
+             "actor_name": actor_names.get(e.actor_id), "notes": e.notes,
+             "occurred_at": e.occurred_at}
+            for e in events
+        ],
     }

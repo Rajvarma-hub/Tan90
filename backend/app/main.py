@@ -6,7 +6,7 @@ from app.db.base import init_schema
 from app.routers import (
     admin, auth, containers, deliveries, dispatches,
     exceptions_router, notifications, orders, packing, products,
-    returns, stations,
+    returns, stations, inventory, directory,
 )
 
 app = FastAPI(title="Tan90 Logistics API", version=__version__)
@@ -36,5 +36,6 @@ def health():
 for r in (
     auth, orders, packing, dispatches, deliveries, returns,
     admin, stations, containers, exceptions_router, products, notifications,
+    inventory, directory,
 ):
     app.include_router(r.router)

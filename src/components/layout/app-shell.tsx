@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { Suspense, useState, type ReactNode } from "react";
 import { AppHeader } from "@/components/layout/app-header";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { cn } from "@/lib/utils";
@@ -19,11 +19,14 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <>
-      <AppSidebar
-        collapsed={collapsed}
-        mobileOpen={mobileOpen}
-        onNavigate={() => setMobileOpen(false)}
-      />
+      {/* Sidebar and header read the pathname, which is only known at request time on dynamic routes. */}
+      <Suspense fallback={null}>
+        <AppSidebar
+          collapsed={collapsed}
+          mobileOpen={mobileOpen}
+          onNavigate={() => setMobileOpen(false)}
+        />
+      </Suspense>
       {mobileOpen && (
         <div
           aria-hidden
@@ -37,7 +40,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           collapsed ? "md:pl-12" : "md:pl-64",
         )}
       >
-        <AppHeader onToggleSidebar={toggleSidebar} />
+        <Suspense fallback={<div className="h-16 shrink-0 border-b" />}>
+          <AppHeader onToggleSidebar={toggleSidebar} />
+        </Suspense>
         <main className="flex flex-1 flex-col">{children}</main>
       </div>
     </>
