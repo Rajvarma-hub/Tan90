@@ -68,7 +68,7 @@ export function AppSidebar({
 
       <nav aria-label="Main" className="flex-1 overflow-x-hidden overflow-y-auto p-2">
         <ul className="flex flex-col gap-1">
-          {mainNav.map(({ title, href, icon: Icon }) => {
+          {mainNav.map(({ title, href, icon: Icon, children }) => {
             const active = isActivePath(pathname, href);
             return (
               <li key={href}>
@@ -76,7 +76,7 @@ export function AppSidebar({
                   href={href}
                   onClick={onNavigate}
                   title={collapsed ? title : undefined}
-                  aria-current={active ? "page" : undefined}
+                  aria-current={pathname === href ? "page" : undefined}
                   className={cn(
                     "flex h-8 items-center gap-2 rounded-md p-2 text-sm outline-none transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-ring",
                     active &&
@@ -89,6 +89,34 @@ export function AppSidebar({
                     {title}
                   </span>
                 </Link>
+                {children && active && (
+                  <ul
+                    className={cn(
+                      "mt-1 ml-3.5 flex flex-col gap-1 border-l pl-2.5",
+                      collapsed && "md:hidden",
+                    )}
+                  >
+                    {children.map((child) => {
+                      const childActive = isActivePath(pathname, child.href);
+                      return (
+                        <li key={child.href}>
+                          <Link
+                            href={child.href}
+                            onClick={onNavigate}
+                            aria-current={childActive ? "page" : undefined}
+                            className={cn(
+                              "flex h-7 items-center rounded-md px-2 text-sm outline-none transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-ring",
+                              childActive &&
+                                "bg-sidebar-accent font-medium text-sidebar-accent-foreground",
+                            )}
+                          >
+                            <span className="truncate">{child.title}</span>
+                          </Link>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
               </li>
             );
           })}
