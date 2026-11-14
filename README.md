@@ -1,99 +1,101 @@
-# tan90
+# Tan90 Thermal Portal
 
-Tan90Thermal operations portal: a Next.js 16 frontend (App Router, Cache Components, Tailwind CSS v4, TypeScript) on a FastAPI + SQLite backend.
+Operations portal for Tan90 cold-chain logistics. It tracks cooling-panel orders from request to delivery and return, and tracks every reusable container by RFID tag or barcode.
 
-## Getting started
+| Part | Tech | Port |
+| --- | --- | --- |
+| Portal (`src/`) | Next.js 16, React 19, TypeScript, Tailwind CSS 4 | 3000 |
+| API (`backend/`) | FastAPI, SQLAlchemy, SQLite | 8001 |
 
-Run the backend and the portal in two terminals.
+> **Status:** working prototype for the Ops team. The portal has no login screen yet. See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for what is done, what is pending, and the plan.
 
-**1. Backend API** (Python 3.10+, port 8001)
+## Quick start
+
+You need **Node.js 20+** and **Python 3.12**. Python 3.12 is the tested version. Python 3.15 fails to install, and 3.13 and 3.14 are untested.
+
+Open two terminals. Start the API first.
+
+**Terminal 1: API**
 
 ```bash
 cd backend
-python3 -m venv .venv            # or: uv venv --python 3.12 .venv
-.venv/bin/pip install -r requirements.txt
-.venv/bin/uvicorn app.main:app --port 8001 --reload
+python -m venv .venv
+# Windows: .venv\Scripts\activate    macOS/Linux: source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --port 8001 --reload
 ```
 
-The database (`backend/tan90.db`) is created and seeded on first start. To reset the demo data, stop the server, delete that file and start again. Swagger UI is at http://127.0.0.1:8001/docs; [backend/API.md](backend/API.md) documents every endpoint and [backend/guide.txt](backend/guide.txt) lists the seeded users and data.
-
-**2. Portal** (Node 20+)
+**Terminal 2: Portal**
 
 ```bash
 npm install
 npm run dev
-
-npm run dev -- -p 3001           # if port 3000 is taken
 ```
 
-If you don't have a `.env.local` yet, create one from [.env.example](.env.example). Don't copy over an existing one, or your local values will be lost. `BACKEND_API_URL` must point at the backend (default `http://127.0.0.1:8001`).
+Open http://localhost:3000. Settings come from `.env.local` in the repo root, which both apps read. Without it, safe development defaults apply. To create it, copy [.env.example](.env.example).
 
-| Command                       | Purpose                                     |
-| ----------------------------- | ------------------------------------------- |
-| `npm run dev`                 | Start the dev server                        |
-| `npm run build`               | Production build                            |
-| `npm run start`               | Serve the production build                  |
-| `npm run lint`                | ESLint                                      |
-| `npm run typecheck`           | Generate route types and run `tsc --noEmit` |
-| `docker compose up --build`   | Build and run the portal image on :3000     |
+The first API start creates `backend/tan90.db` and fills it with demo data. To reset the data, stop the API, delete that file, and start it again.
 
-## What works
+## Useful links
 
-- **Orders** (`/orders`): searchable, filterable list; create an order; order page with customer, station, items, containers and activity, plus the next step for the order's status: approve or cancel, start packing, pack containers, dispatch with driver and vehicle, depart, arrive, deliver, confirm receipt, request return, assign return driver, collect, receive, inspect and close.
-- **Inventory** (`/inventory`): asset list with stock totals and add-asset; stock per station; movements timeline with inward/outward, type, station and asset filters; record new inventory, damage, adjustments and station-to-station transfers; freezing stations with stock, free containers and open orders.
-- Dispatching an order takes its panels out of the station's stock and records a Sales movement.
-- **Asset Management** (`/assets`): every container with its status, where it is and the order it is linked to; counts of what is in stock, out, coming back and damaged; register a container by scanning its tag; container page with order history, movement history and tag replacement.
-- **Scanning.** Scan boxes accept a barcode or RFID scanner (it types the code and presses Enter) or a typed code. A scan can be the tag ID or the container code on the label (`CON-000016`). Containers are linked to an order by scanning them into its packing session; several containers can be on one order. Dispatch, driver loading and return pickup are verified by scanning the order's containers.
-- **Deliveries** (`/deliveries`): open deliveries and return pickups per driver, with load, depart, arrive, deliver and collect steps.
-- **Exceptions** (`/exceptions`): unknown scans and containers reported missing or damaged, with resolve.
+| What | Where |
+| --- | --- |
+| Portal | http://localhost:3000 |
+| API docs (Swagger) | http://localhost:8001/docs |
+| API health | http://localhost:8001/health |
+| Demo users (password `password123`) | [backend/guide.txt](backend/guide.txt) |
+| Every endpoint | [backend/API.md](backend/API.md) |
 
-## Project structure
+## Commands
+
+| Command | Does |
+| --- | --- |
+| `npm run dev` | Start the portal in development |
+| `npm run lint` | Check code style |
+| `npm run typecheck` | Check types |
+| `npm run build` | Production build |
+| `npm run start` | Run the production build |
+| `python backend/test.py` | Test every API endpoint (API must be running) |
+
+Run `lint`, `typecheck` and `build` before every commit.
+
+## Configuration
+
+Both apps run without any settings in development. Set these in production.
+
+**Portal** (environment variables, or `.env.local`)
+
+| Variable | Default | Notes |
+| --- | --- | --- |
+| `BACKEND_API_URL` | `http://127.0.0.1:8001` | Where the API runs |
+| `BACKEND_EMAIL` | none | **Required in production.** Service account the portal signs in with |
+| `BACKEND_PASSWORD` | none | **Required in production** |
+| `NEXT_PUBLIC_APP_URL` | `http://localhost:3000` | Public URL, set at build time |
+
+**API** (environment variables, or `.env.local`)
+
+| Variable | Default | Notes |
+| --- | --- | --- |
+| `ENVIRONMENT` | `development` | Set to `production` to enable the safety checks below |
+| `JWT_SECRET` | dev value | **Required in production:** random, 32+ characters |
+| `DATABASE_URL` | `sqlite:///./tan90.db` | |
+| `CORS_ORIGINS` | `http://localhost:3000` | Comma-separated list |
+| `JWT_TTL_SECONDS` | `86400` | Token lifetime |
+
+With `ENVIRONMENT=production` the API refuses to start with a weak `JWT_SECRET` and never loads demo data. Template: [.env.example](.env.example). Real environment variables always win over `.env.local`. Never commit real secrets.
+
+## Project layout
 
 ```
-backend/                 # FastAPI + SQLite API (Python)
-├── app/
-│   ├── core/            # Config, auth dependencies, order and container state machines
-│   ├── db/              # Engine, session, seed data
-│   ├── models/          # SQLAlchemy models
-│   ├── routers/         # One file per API area (orders, inventory, stations, ...)
-│   ├── schemas/         # Pydantic request/response shapes
-│   └── services/        # order_flow (lifecycle), inventory (stock ledger), scan, container_view
-├── API.md               # Endpoint-by-endpoint API reference
-├── guide.txt            # Seeded users, stations, products and sample payloads
-└── test.py              # End-to-end endpoint test (expects the API on :8000)
-
-src/                     # Next.js portal
-├── app/                 # Routing only: layouts, pages, route handlers, special files
-│   ├── (portal)/        # App shell + /orders, /inventory/*, /assets, /deliveries, /exceptions
-│   ├── api/             # Route handlers (e.g. /api/health)
-│   └── layout.tsx       # Root layout: <html>, fonts, metadata
-├── components/
-│   ├── layout/          # App shell: sidebar, header
-│   └── ui/              # Primitives: button, form controls, dialog, card, table, badge, tabs
-├── config/              # Validated env, site config, sidebar navigation
-├── features/            # Domain modules, one folder per feature
-│   ├── orders/          # List, new order, detail page and every lifecycle action
-│   ├── inventory/       # Assets, stock per station, movements, freezing stations
-│   ├── containers/      # Asset Management: container register, scan checklist, tag replacement
-│   ├── deliveries/      # Driver board
-│   └── exceptions/      # Unknown scans, missing and damaged containers
-├── hooks/               # Shared client hooks (useServerAction)
-├── lib/                 # Isomorphic utilities: AppError, ActionResult, formatting
-└── server/              # Server-only: backend.ts (API client), createAction, logger
+backend/app/      API: routers, services, models, schemas, seed data
+src/app/          Portal pages and routes
+src/features/     One folder per feature: orders, inventory, containers, deliveries, exceptions
+src/components/   Shared UI and the app shell
+src/server/       Server-only code, including the API client
+docs/             Developer guide
 ```
 
-### Conventions
+## Documentation
 
-- **`app/` stays thin.** Pages compose components and call into `features/` or `server/`. Route-specific, non-shared code may be colocated in `_components/` or `_lib/` private folders.
-- **Feature modules** (`src/features/<feature>/`) own a vertical slice: `components/`, `actions.ts` (`"use server"`), `queries.ts` (server-only reads), `service.ts` (business logic shared by actions and route handlers), `schemas.ts` (zod), `types.ts`. Features import from `components/`, `lib/`, `server/`, but not from other features' internals.
-- **Server boundary.** Anything touching secrets, the database, or `process.env` starts with `import "server-only"`. Queries perform authorization and return minimal DTOs to the UI ([Data Access Layer](https://nextjs.org/docs/app/guides/data-security#data-access-layer)).
-- **Errors.** Throw `AppError(code, message)` for expected failures; its message is shown to clients. Any other error is logged and returned as a generic `INTERNAL_ERROR`.
-- **Server Actions** are built with `createAction(schema, handler)` and return `ActionResult<T>` (`{ ok: true, data }` or `{ ok: false, error }`) instead of throwing.
-- **Route Handlers** (for webhooks and external clients) wrap the handler in `withErrorHandling()` and read bodies with `parseJson(request, schema)`. Errors come back as `{ error: { code, message, fieldErrors? } }` with the matching HTTP status.
-- **Backend calls.** Pages and Server Actions reach the FastAPI backend only through `backend()` in [src/server/backend.ts](src/server/backend.ts). It signs in as the service user from `BACKEND_EMAIL` / `BACKEND_PASSWORD` (the seeded Ops account by default), so the prototype has no login screen.
-- **Environment variables** are validated with zod at startup. Server vars go in [src/config/env.server.ts](src/config/env.server.ts); browser-safe `NEXT_PUBLIC_*` vars go in [src/config/env.public.ts](src/config/env.public.ts). Document every var in `.env.example`.
-- **Route groups** like `(marketing)`, `(auth)`, `(dashboard)` give each area its own layout without affecting URLs.
-- **Caching.** Cache Components is enabled: cache with `"use cache"` + `cacheLife`/`cacheTag`, and wrap request-time data (`cookies()`, `headers()`, uncached fetches) in `<Suspense>`.
-- **Imports** use the `@/*` alias (maps to `src/*`). Typed routes are enabled, so `<Link href>` is checked at build time.
-- **Naming:** kebab-case file names, PascalCase components, named exports outside of Next.js special files.
-- **Deployment.** The [Dockerfile](Dockerfile) builds with `NEXT_OUTPUT=standalone`, runs as a non-root user and checks `/api/health`. Pass `NEXT_PUBLIC_*` values as build args, because they are inlined at build time. Provide server secrets as runtime environment variables. Security headers are set in [next.config.ts](next.config.ts).
+- [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md): how the system works, how to add features, status and plan
+- [backend/API.md](backend/API.md): API reference
