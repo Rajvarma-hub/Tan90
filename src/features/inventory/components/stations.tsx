@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { MapPin, PlusCircle, Snowflake, Warehouse } from "lucide-react";
+import { MapPin, Plus, Snowflake, Warehouse } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardHeader, EmptyState } from "@/components/ui/card";
+import { Card, CardHeader, EmptyState, ItemCard, ItemGrid } from "@/components/ui/card";
 import { Dialog } from "@/components/ui/dialog";
 import { Field, FormError, Input, Select } from "@/components/ui/form";
+import { Page, PageHeader, Stat, StatGrid, Toolbar } from "@/components/ui/page";
 import { createStation } from "@/features/inventory/actions";
 import type { StationSummary } from "@/features/inventory/types";
 import { useServerAction } from "@/hooks/use-server-action";
@@ -35,9 +36,9 @@ function AddStationDialog() {
           setOpen(true);
         }}
       >
-        <PlusCircle /> Add Freezing Station
+        <Plus /> Add Location
       </Button>
-      <Dialog open={open} onClose={() => setOpen(false)} title="Add Freezing Station">
+      <Dialog open={open} onClose={() => setOpen(false)} title="Add Location">
         <form
           className="grid gap-4"
           onSubmit={(event) => {
@@ -86,7 +87,7 @@ function AddStationDialog() {
           </Field>
           <FormError message={error} />
           <Button type="submit" disabled={pending} className="justify-self-start">
-            {pending ? "Adding…" : "Add Station"}
+            {pending ? "Adding…" : "Add Location"}
           </Button>
         </form>
       </Dialog>
@@ -110,87 +111,87 @@ export function Stations({ stations }: { stations: StationSummary[] }) {
   );
 
   return (
-    <Card>
-      <CardHeader
-        title="Freezing Stations"
-        description="Monitor stock, containers and open orders at every station."
+    <Page>
+      <PageHeader
+        title="Locations"
+        description="Stock, free containers and open orders at every location."
         actions={<AddStationDialog />}
       />
-      <div className="mb-5 flex flex-wrap gap-3">
-        <Input
-          type="search"
-          className="w-full max-w-md"
-          placeholder="Search freezing stations…"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-        />
-        <Select
-          className="w-48"
-          aria-label="Type"
-          value={kind}
-          onChange={(event) => setKind(event.target.value)}
-        >
-          <option value="">All types</option>
-          <option value="FREEZING_STATION">Freezing stations</option>
-          <option value="WAREHOUSE">Warehouses</option>
-        </Select>
-      </div>
 
-      {shown.length === 0 ? (
-        <EmptyState>No stations match this search.</EmptyState>
-      ) : (
-        <ul className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {shown.map((station) => {
-            const Icon = station.kind === "WAREHOUSE" ? Warehouse : Snowflake;
-            return (
-              <li
+      <StatGrid>
+        <Stat label="Locations" value={formatNumber(stations.length)} />
+        <Stat
+          label="Units in stock"
+          value={formatNumber(stations.reduce((sum, s) => sum + s.stockUnits, 0))}
+        />
+        <Stat
+          label="Containers free"
+          value={formatNumber(stations.reduce((sum, s) => sum + s.containersAvailable, 0))}
+        />
+        <Stat
+          label="Open orders"
+          value={formatNumber(stations.reduce((sum, s) => sum + s.openOrders, 0))}
+        />
+      </StatGrid>
+
+      <Card>
+        <CardHeader
+          title="All locations"
+          description={`${shown.length} of ${stations.length} shown`}
+        />
+        <Toolbar>
+          <Input
+            type="search"
+            className="min-w-56 flex-1"
+            placeholder="Search code, name, address…"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+          <Select
+            className="w-48"
+            aria-label="Type"
+            value={kind}
+            onChange={(event) => setKind(event.target.value)}
+          >
+            <option value="">All types</option>
+            <option value="FREEZING_STATION">Freezing stations</option>
+            <option value="WAREHOUSE">Warehouses</option>
+          </Select>
+        </Toolbar>
+
+        {shown.length === 0 ? (
+          <EmptyState>No locations match this search.</EmptyState>
+        ) : (
+          <ItemGrid>
+            {shown.map((station) => (
+              <ItemCard
                 key={station.id}
-                className="flex flex-col gap-4 rounded-xl border bg-background/30 p-5"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h3 className="font-medium text-card-foreground">{station.code}</h3>
-                    <p className="text-sm text-muted-foreground">{station.name}</p>
-                  </div>
-                  <Icon className="size-5 shrink-0 text-primary" />
-                </div>
-                <p className="flex gap-2 text-sm text-muted-foreground">
-                  <MapPin className="mt-0.5 size-4 shrink-0" />
-                  {station.address ?? "No address"}
-                </p>
-                <dl className="grid grid-cols-3 gap-2 border-t pt-4 text-center">
-                  <div>
-                    <dd className="text-lg font-semibold text-card-foreground tabular-nums">
-                      {formatNumber(station.stockUnits)}
-                    </dd>
-                    <dt className="text-xs text-muted-foreground">Panels in stock</dt>
-                  </div>
-                  <div>
-                    <dd className="text-lg font-semibold text-card-foreground tabular-nums">
-                      {station.containersAvailable}
-                      <span className="text-sm font-normal text-muted-foreground">
-                        /{station.containersTotal}
-                      </span>
-                    </dd>
-                    <dt className="text-xs text-muted-foreground">Containers free</dt>
-                  </div>
-                  <div>
-                    <dd className="text-lg font-semibold text-card-foreground tabular-nums">
-                      {station.openOrders}
-                    </dd>
-                    <dt className="text-xs text-muted-foreground">Open orders</dt>
-                  </div>
-                </dl>
-                <div>
+                icon={station.kind === "WAREHOUSE" ? Warehouse : Snowflake}
+                title={station.code}
+                subtitle={station.name}
+                badge={
                   <Badge tone={station.is_active ? "blue" : "gray"}>
                     {station.is_active ? "Online" : "Offline"}
                   </Badge>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </Card>
+                }
+                stats={[
+                  { label: "In stock", value: formatNumber(station.stockUnits) },
+                  {
+                    label: "Containers free",
+                    value: `${station.containersAvailable}/${station.containersTotal}`,
+                  },
+                  { label: "Open orders", value: station.openOrders },
+                ]}
+              >
+                <p className="flex gap-2">
+                  <MapPin className="mt-0.5 size-4 shrink-0" />
+                  <span className="line-clamp-2">{station.address ?? "No address"}</span>
+                </p>
+              </ItemCard>
+            ))}
+          </ItemGrid>
+        )}
+      </Card>
+    </Page>
   );
 }

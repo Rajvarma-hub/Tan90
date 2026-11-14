@@ -40,16 +40,13 @@ export function whereabouts(container: {
 
 export const containerStatuses = Object.keys(containerStatusMeta);
 
-// Buckets for the "what is in, what is out" strip on Asset Management.
-export const containerBuckets: { label: string; statuses: string[]; tone: BadgeTone }[] = [
-  { label: "In stock", statuses: ["AVAILABLE"], tone: "green" },
-  { label: "Being packed", statuses: ["PACKING", "PACKED"], tone: "cyan" },
-  { label: "Out for delivery", statuses: ["IN_TRANSIT_TO_CUSTOMER"], tone: "purple" },
-  { label: "With customers", statuses: ["WITH_CUSTOMER"], tone: "blue" },
+// Four buckets for the stat row on Containers; damaged and missing are reached through the status filter.
+export const containerBuckets: { label: string; statuses: string[] }[] = [
+  { label: "In stock", statuses: ["AVAILABLE"] },
+  { label: "Out for delivery", statuses: ["PACKING", "PACKED", "IN_TRANSIT_TO_CUSTOMER"] },
+  { label: "With customers", statuses: ["WITH_CUSTOMER"] },
   {
     label: "Coming back",
     statuses: ["RETURN_REQUESTED", "IN_TRANSIT_TO_STATION", "UNDER_INSPECTION"],
-    tone: "orange",
   },
-  { label: "Damaged / missing", statuses: ["DAMAGED", "QUARANTINED", "MISSING"], tone: "red" },
 ];

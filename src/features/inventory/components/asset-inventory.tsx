@@ -1,12 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { PlusCircle } from "lucide-react";
+import { Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, EmptyState } from "@/components/ui/card";
 import { Dialog } from "@/components/ui/dialog";
 import { Field, FormError, Input, Select } from "@/components/ui/form";
+import { Page, PageHeader, Stat, StatGrid, Toolbar } from "@/components/ui/page";
 import { Table, Td, Th } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
 import { createProduct } from "@/features/inventory/actions";
@@ -35,9 +36,9 @@ function AddAssetDialog() {
           setOpen(true);
         }}
       >
-        <PlusCircle /> Add Asset
+        <Plus /> Add Product
       </Button>
-      <Dialog open={open} onClose={() => setOpen(false)} title="Create Asset">
+      <Dialog open={open} onClose={() => setOpen(false)} title="Add Product">
         <form
           className="grid gap-4"
           onSubmit={(event) => {
@@ -49,7 +50,7 @@ function AddAssetDialog() {
             <Input
               required
               maxLength={200}
-              placeholder="Asset name"
+              placeholder="Product name"
               value={name}
               onChange={(event) => setName(event.target.value)}
             />
@@ -80,7 +81,7 @@ function AddAssetDialog() {
           </Field>
           <FormError message={error} />
           <Button type="submit" disabled={pending} className="justify-self-start">
-            {pending ? "Creating…" : "Create Asset"}
+            {pending ? "Adding…" : "Add Product"}
           </Button>
         </form>
       </Dialog>
@@ -136,145 +137,191 @@ export function AssetInventory({
       (!locationId || b.location_id === locationId),
   );
 
+  const stockByProduct = new Map<string, number>();
+  for (const b of balances) {
+    stockByProduct.set(b.product_id, (stockByProduct.get(b.product_id) ?? 0) + b.quantity);
+  }
+  const unitsInStock = balances.reduce((sum, b) => sum + b.quantity, 0);
+  const outOfStock = products.filter((p) => !stockByProduct.get(p.id)).length;
+
   return (
-    <Card>
-      <CardHeader title="Asset Inventory" description="Manage all assets" />
-      <Tabs
-        className="mb-5 flex w-full"
-        value={tab}
-        onChange={setTab}
-        options={[
-          { value: "assets", label: "Assets" },
-          { value: "inventory", label: "Inventory" },
-        ]}
+    <Page>
+      <PageHeader
+        title="Products"
+        description="Cooling-panel types and the stock held at each location."
+        actions={<AddAssetDialog />}
       />
 
-      {tab === "assets" ? (
-        <>
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <Input
-              type="search"
-              className="w-full max-w-md"
-              placeholder="Search name, SKU, category…"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
+      <StatGrid>
+        <Stat label="Products" value={formatNumber(products.length)} />
+        <Stat label="Units in stock" value={formatNumber(unitsInStock)} />
+        <Stat label="Locations stocked" value={formatNumber(locations.length)} />
+        <Stat label="Out of stock" value={formatNumber(outOfStock)} />
+      </StatGrid>
+
+      <Card>
+        <CardHeader
+          title={tab === "assets" ? "All products" : "Stock by location"}
+          description={
+            tab === "assets"
+              ? `${assets.length} of ${products.length} shown`
+              : `${stockRows.length} of ${balances.length} shown`
+          }
+          actions={
+            <Tabs
+              value={tab}
+              onChange={setTab}
+              options={[
+                { value: "assets", label: "Products" },
+                { value: "inventory", label: "Stock" },
+              ]}
             />
-            <AddAssetDialog />
-          </div>
-          {assets.length === 0 ? (
-            <EmptyState>No assets match this search.</EmptyState>
-          ) : (
-            <Table>
-              <thead>
-                <tr>
-                  <Th>Name</Th>
-                  <Th>SKU</Th>
-                  <Th>Category</Th>
-                  <Th className="text-center">Setpoint</Th>
-                  <Th className="text-center">Stations</Th>
-                  <Th className="text-center">In Stock</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {assets.map((asset) => (
-                  <tr key={asset.id}>
-                    <Td>{asset.name}</Td>
-                    <Td className="font-mono text-xs">{asset.sku}</Td>
-                    <Td>
-                      <Badge tone={asset.category.tone}>{asset.category.label}</Badge>
-                    </Td>
-                    <Td className="text-center tabular-nums">
-                      {formatSetpoint(asset.setpoint_c)}
-                    </Td>
-                    <Td className="text-center tabular-nums">{asset.stations}</Td>
-                    <Td className="text-center font-medium tabular-nums">
-                      {formatNumber(asset.inStock)}
-                    </Td>
+          }
+        />
+
+        {tab === "assets" ? (
+          <>
+            <Toolbar>
+              <Input
+                type="search"
+                className="min-w-56 flex-1"
+                placeholder="Search name, SKU, category…"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+              />
+            </Toolbar>
+            {assets.length === 0 ? (
+              <EmptyState>No products match this search.</EmptyState>
+            ) : (
+              <Table>
+                <thead>
+                  <tr>
+                    <Th>Product</Th>
+                    <Th className="text-center">Category</Th>
+                    <Th className="text-center">Setpoint</Th>
+                    <Th className="text-center">Locations</Th>
+                    <Th className="text-center">In stock</Th>
                   </tr>
-                ))}
-              </tbody>
-            </Table>
-          )}
-        </>
-      ) : (
-        <>
-          <div className="mb-4 flex flex-wrap gap-3">
-            <Select
-              className="w-64"
-              aria-label="Asset"
-              value={productId}
-              onChange={(event) => setProductId(event.target.value)}
-            >
-              <option value="">All Assets</option>
-              {products.map((product) => (
-                <option key={product.id} value={product.id}>
-                  {product.name}
-                </option>
-              ))}
-            </Select>
-            <Select
-              className="w-48"
-              aria-label="Station"
-              value={locationId}
-              onChange={(event) => setLocationId(event.target.value)}
-            >
-              <option value="">All Stations</option>
-              {locations.map((location) => (
-                <option key={location.id} value={location.id}>
-                  {location.code}
-                </option>
-              ))}
-            </Select>
-          </div>
-          {stockRows.length === 0 ? (
-            <EmptyState>No stock recorded for this selection.</EmptyState>
-          ) : (
-            <Table>
-              <thead>
-                <tr>
-                  <Th>Asset Name</Th>
-                  <Th>Category</Th>
-                  <Th>Station Name</Th>
-                  <Th className="text-center">In Stock</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {stockRows.map((row) => {
-                  const category = categoryOf(row.setpoint_c);
-                  return (
-                    <tr key={row.id}>
+                </thead>
+                <tbody>
+                  {assets.map((asset) => {
+                    const showStock = () => {
+                      setProductId(asset.id);
+                      setLocationId("");
+                      setTab("inventory");
+                    };
+                    return (
+                    <tr
+                      key={asset.id}
+                      tabIndex={0}
+                      title="View stock by location"
+                      onClick={showStock}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") showStock();
+                      }}
+                      className="cursor-pointer transition-colors hover:bg-accent/60 focus-visible:bg-accent/60 focus-visible:outline-none"
+                    >
                       <Td>
-                        <div>{row.product_name}</div>
-                        <div className="font-mono text-xs text-muted-foreground">
-                          {row.sku}
-                        </div>
+                        <div className="font-medium">{asset.name}</div>
+                        <div className="font-mono text-xs text-muted-foreground">{asset.sku}</div>
                       </Td>
-                      <Td>
-                        <Badge tone={category.tone}>{category.label}</Badge>
+                      <Td className="text-center">
+                        <Badge tone={asset.category.tone}>{asset.category.label}</Badge>
                       </Td>
-                      <Td>
-                        <div className="font-medium">{row.location_code}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {row.location_name}
-                        </div>
+                      <Td className="text-center tabular-nums">
+                        {formatSetpoint(asset.setpoint_c)}
                       </Td>
-                      <Td
-                        className={
-                          row.quantity === 0
-                            ? "text-center font-medium text-red-400 tabular-nums"
-                            : "text-center font-medium tabular-nums"
-                        }
-                      >
-                        {formatNumber(row.quantity)}
+                      <Td className="text-center tabular-nums">{asset.stations}</Td>
+                      <Td className="text-center font-medium tabular-nums">
+                        {formatNumber(asset.inStock)}
                       </Td>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </Table>
-          )}
-        </>
-      )}
-    </Card>
+                    );
+                  })}
+                </tbody>
+              </Table>
+            )}
+          </>
+        ) : (
+          <>
+            <Toolbar>
+              <Select
+                className="w-48"
+                aria-label="Product"
+                value={productId}
+                onChange={(event) => setProductId(event.target.value)}
+              >
+                <option value="">All products</option>
+                {products.map((product) => (
+                  <option key={product.id} value={product.id}>
+                    {product.name}
+                  </option>
+                ))}
+              </Select>
+              <Select
+                className="w-48"
+                aria-label="Location"
+                value={locationId}
+                onChange={(event) => setLocationId(event.target.value)}
+              >
+                <option value="">All locations</option>
+                {locations.map((location) => (
+                  <option key={location.id} value={location.id}>
+                    {location.code}
+                  </option>
+                ))}
+              </Select>
+            </Toolbar>
+            {stockRows.length === 0 ? (
+              <EmptyState>No stock recorded for this selection.</EmptyState>
+            ) : (
+              <Table>
+                <thead>
+                  <tr>
+                    <Th>Product</Th>
+                    <Th className="text-center">Category</Th>
+                    <Th>Location</Th>
+                    <Th className="text-center">In stock</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stockRows.map((row) => {
+                    const category = categoryOf(row.setpoint_c);
+                    return (
+                      <tr key={row.id}>
+                        <Td>
+                          <div className="font-medium">{row.product_name}</div>
+                          <div className="font-mono text-xs text-muted-foreground">
+                            {row.sku}
+                          </div>
+                        </Td>
+                        <Td className="text-center">
+                          <Badge tone={category.tone}>{category.label}</Badge>
+                        </Td>
+                        <Td>
+                          <div className="font-medium">{row.location_code}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {row.location_name}
+                          </div>
+                        </Td>
+                        <Td
+                          className={
+                            row.quantity === 0
+                              ? "text-center font-medium text-red-400 tabular-nums"
+                              : "text-center font-medium tabular-nums"
+                          }
+                        >
+                          {formatNumber(row.quantity)}
+                        </Td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </Table>
+            )}
+          </>
+        )}
+      </Card>
+    </Page>
   );
 }

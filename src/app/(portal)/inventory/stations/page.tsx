@@ -4,14 +4,10 @@ import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { Stations } from "@/features/inventory/components/stations";
 import { getStationSummaries } from "@/features/inventory/queries";
 
-export const metadata: Metadata = { title: "Freezing Stations" };
+export const metadata: Metadata = { title: "Locations" };
 
 async function StationList() {
-  return (
-    <div className="p-4">
-      <Stations stations={await getStationSummaries()} />
-    </div>
-  );
+  return <Stations stations={await getStationSummaries()} />;
 }
 
 export default function StationsPage() {

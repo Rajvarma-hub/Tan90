@@ -19,9 +19,15 @@ Open two terminals. Start the API first.
 
 ```bash
 cd backend
-python -m venv .venv
-# Windows: .venv\Scripts\activate    macOS/Linux: source .venv/bin/activate
-pip install -r requirements.txt
+# Windows PowerShell
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --port 8001 --reload
+
+# macOS/Linux
+python3.12 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements-dev.txt
 uvicorn app.main:app --port 8001 --reload
 ```
 

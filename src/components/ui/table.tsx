@@ -3,8 +3,14 @@ import { cn } from "@/lib/utils";
 
 export function Table({ className, ...props }: ComponentProps<"table">) {
   return (
-    <div className="overflow-x-auto">
-      <table className={cn("w-full text-left text-sm", className)} {...props} />
+    <div className="overflow-x-auto rounded-lg border border-border/60">
+      <table
+        className={cn(
+          "w-full text-left text-sm [&_tbody_tr:last-child_td]:border-b-0",
+          className,
+        )}
+        {...props}
+      />
     </div>
   );
 }
@@ -13,7 +19,7 @@ export function Th({ className, ...props }: ComponentProps<"th">) {
   return (
     <th
       className={cn(
-        "border-b px-3 py-3 font-medium whitespace-nowrap text-muted-foreground",
+        "border-b border-border/60 bg-muted/50 px-4 py-3 text-xs font-medium tracking-wide whitespace-nowrap text-muted-foreground uppercase",
         className,
       )}
       {...props}
@@ -24,7 +30,10 @@ export function Th({ className, ...props }: ComponentProps<"th">) {
 export function Td({ className, ...props }: ComponentProps<"td">) {
   return (
     <td
-      className={cn("border-b px-3 py-3.5 text-card-foreground", className)}
+      className={cn(
+        "border-b border-border/60 px-4 py-3.5 align-middle text-card-foreground",
+        className,
+      )}
       {...props}
     />
   );

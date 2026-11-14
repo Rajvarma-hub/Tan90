@@ -4,15 +4,11 @@ import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { AssetInventory } from "@/features/inventory/components/asset-inventory";
 import { getBalances, getProducts } from "@/features/inventory/queries";
 
-export const metadata: Metadata = { title: "Asset Inventory" };
+export const metadata: Metadata = { title: "Products" };
 
 async function Assets() {
   const [products, balances] = await Promise.all([getProducts(), getBalances()]);
-  return (
-    <div className="p-4">
-      <AssetInventory products={products} balances={balances} />
-    </div>
-  );
+  return <AssetInventory products={products} balances={balances} />;
 }
 
 export default function AssetInventoryPage() {

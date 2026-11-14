@@ -9,7 +9,8 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { buttonClass } from "@/components/ui/button";
-import { Card, CardHeader, EmptyState } from "@/components/ui/card";
+import { Card, CardHeader, EmptyState, ItemCard, ItemGrid } from "@/components/ui/card";
+import { Page, PageHeader, Stat, StatGrid } from "@/components/ui/page";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 import {
   getMovements,
@@ -18,43 +19,28 @@ import {
 } from "@/features/inventory/queries";
 import { formatDateTime, formatNumber, humanize } from "@/lib/format";
 
-export const metadata: Metadata = { title: "Inventory Management" };
+export const metadata: Metadata = { title: "Inventory" };
 
 type Section = {
   title: string;
   description: string;
   href: Route;
   icon: ComponentType<{ className?: string }>;
-  stats: { label: string; value: number }[];
 };
 
-function SectionCard({ title, description, href, icon: Icon, stats }: Section) {
+function SectionCard({ title, description, href, icon }: Section) {
   return (
-    <li className="flex flex-col rounded-xl border bg-card p-6">
-      <div className="flex items-center gap-3">
-        <span className="flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
-          <Icon className="size-5" />
-        </span>
-        <h3 className="text-lg font-medium text-card-foreground">{title}</h3>
-      </div>
-      <p className="mt-3 flex-1 text-sm text-muted-foreground">{description}</p>
-      <dl className="mt-5 grid grid-cols-2 divide-x border-t pt-5 text-center">
-        {stats.map(({ label, value }) => (
-          <div key={label}>
-            <dt className="text-xs text-muted-foreground">{label}</dt>
-            <dd className="mt-1 text-2xl font-semibold text-card-foreground tabular-nums">
-              {formatNumber(value)}
-            </dd>
-          </div>
-        ))}
-      </dl>
-      <Link
-        href={href}
-        className={buttonClass({ variant: "outline", className: "mt-6 w-full" })}
-      >
-        Open {title} <ArrowRight />
-      </Link>
-    </li>
+    <ItemCard
+      icon={icon}
+      title={title}
+      footer={
+        <Link href={href} className={buttonClass({ variant: "outline", className: "w-full" })}>
+          Open <ArrowRight />
+        </Link>
+      }
+    >
+      {description}
+    </ItemCard>
   );
 }
 
@@ -65,67 +51,52 @@ async function Overview() {
     getMovements(),
   ]);
 
+  const inward = movements.filter((m) => m.direction === "INWARD").length;
+  const unitsInStock = stations.reduce((sum, s) => sum + s.stockUnits, 0);
+  const containersFree = stations.reduce((sum, s) => sum + s.containersAvailable, 0);
+
   const sections: Section[] = [
     {
-      title: "Asset Inventory",
-      description: "Cooling panels by type, with stock per station.",
+      title: "Products",
+      description: "Cooling-panel types and the stock held at each location.",
       href: "/inventory/assets",
       icon: PackageSearch,
-      stats: [
-        { label: "Asset types", value: products.length },
-        {
-          label: "Units in stock",
-          value: stations.reduce((sum, s) => sum + s.stockUnits, 0),
-        },
-      ],
     },
     {
-      title: "Movements",
-      description: "Every inward and outward stock change, plus new entries.",
+      title: "Stock Movements",
+      description: `${formatNumber(movements.length)} stock changes: ${formatNumber(inward)} inward, ${formatNumber(movements.length - inward)} outward.`,
       href: "/inventory/movements",
       icon: ArrowLeftRight,
-      stats: [
-        {
-          label: "Inward",
-          value: movements.filter((m) => m.direction === "INWARD").length,
-        },
-        {
-          label: "Outward",
-          value: movements.filter((m) => m.direction === "OUTWARD").length,
-        },
-      ],
     },
     {
-      title: "Freezing Stations",
-      description: "Stock, free containers and open orders at each location.",
+      title: "Locations",
+      description: "Freezing stations and warehouses: stock, free containers and open orders.",
       href: "/inventory/stations",
       icon: Snowflake,
-      stats: [
-        { label: "Locations", value: stations.length },
-        {
-          label: "Containers free",
-          value: stations.reduce((sum, s) => sum + s.containersAvailable, 0),
-        },
-      ],
     },
   ];
 
   const recent = movements.slice(0, 5);
 
   return (
-    <div className="grid gap-4 p-4">
-      <div>
-        <h2 className="text-xl font-semibold text-foreground">Inventory Management</h2>
-        <p className="text-sm text-muted-foreground">
-          Assets, stock movements and freezing stations at a glance.
-        </p>
-      </div>
+    <Page>
+      <PageHeader
+        title="Inventory"
+        description="Products, stock movements and locations at a glance."
+      />
 
-      <ul className="grid gap-4 md:grid-cols-3">
+      <StatGrid>
+        <Stat label="Products" value={formatNumber(products.length)} />
+        <Stat label="Units in stock" value={formatNumber(unitsInStock)} />
+        <Stat label="Locations" value={formatNumber(stations.length)} />
+        <Stat label="Containers free" value={formatNumber(containersFree)} />
+      </StatGrid>
+
+      <ItemGrid>
         {sections.map((section) => (
           <SectionCard key={section.href} {...section} />
         ))}
-      </ul>
+      </ItemGrid>
 
       <Card>
         <CardHeader
@@ -134,7 +105,7 @@ async function Overview() {
           actions={
             <Link
               href="/inventory/movements"
-              className={buttonClass({ variant: "ghost", size: "sm" })}
+              className={buttonClass({ variant: "outline", size: "sm" })}
             >
               View all <ArrowRight />
             </Link>
@@ -143,11 +114,11 @@ async function Overview() {
         {recent.length === 0 ? (
           <EmptyState>No stock movements yet.</EmptyState>
         ) : (
-          <ul className="divide-y">
+          <ul className="divide-y divide-border/60 rounded-lg border border-border/60">
             {recent.map((m) => (
               <li
                 key={m.id}
-                className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-3 first:pt-0 last:pb-0"
+                className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-3.5"
               >
                 <div className="flex min-w-0 items-center gap-3">
                   <Badge tone={m.direction === "INWARD" ? "green" : "orange"}>
@@ -165,7 +136,7 @@ async function Overview() {
           </ul>
         )}
       </Card>
-    </div>
+    </Page>
   );
 }
 

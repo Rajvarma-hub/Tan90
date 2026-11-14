@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
-import { Card, CardHeader, Detail, EmptyState } from "@/components/ui/card";
+import { Card, CardHeader, Detail, DetailGrid, EmptyState } from "@/components/ui/card";
+import { Page, PageHeader } from "@/components/ui/page";
 import { Table, Td, Th } from "@/components/ui/table";
 import { ContainerStatusBadge } from "@/features/containers/components/container-status-badge";
 import { ReplaceTagDialog } from "@/features/containers/components/replace-tag-dialog";
@@ -15,60 +15,56 @@ const statusLabel = (status: string | null) =>
 
 export function ContainerDetailView({ container }: { container: ContainerDetail }) {
   return (
-    <div className="flex flex-col gap-4 p-4">
-      <Link
-        href="/assets"
-        className="inline-flex items-center gap-2 self-start text-sm font-medium text-card-foreground hover:text-primary"
-      >
-        <ArrowLeft className="size-4" /> Back to Asset Management
-      </Link>
+    <Page>
+      <PageHeader
+        back={{ href: "/assets", label: "Containers" }}
+        title={container.container_code}
+        badge={<ContainerStatusBadge status={container.status} />}
+        description={container.container_type}
+        actions={<ReplaceTagDialog containerId={container.id} />}
+      />
 
       <Card>
-        <CardHeader
-          title={container.container_code}
-          description={container.container_type}
-          actions={<ReplaceTagDialog containerId={container.id} />}
-        />
-        <dl className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          <Detail label="Status">
-            <ContainerStatusBadge status={container.status} />
-          </Detail>
+        <CardHeader title="Container details" />
+        <DetailGrid>
           <Detail label="Tag ID">
             <span className="font-mono text-sm">{container.epc ?? "No tag"}</span>
           </Detail>
           <Detail label="Capacity">{container.capacity_litres} L</Detail>
-          <Detail label="Current Location">
+          <Detail label="Location">
             {[whereabouts(container).primary, whereabouts(container).secondary]
               .filter(Boolean)
               .join(" · ")}
           </Detail>
-          <Detail label="Linked Order">
-            {container.current_order ? (
-              <span className="flex flex-wrap items-center gap-2">
-                <Link
-                  href={`/orders/${container.current_order.id}`}
-                  className="font-medium text-primary hover:underline"
-                >
-                  {container.current_order.order_number}
-                </Link>
-                <OrderStatusBadge status={container.current_order.status as OrderStatus} />
-                <span className="text-sm text-muted-foreground">
-                  {container.current_order.customer_name}
-                </span>
-              </span>
-            ) : (
-              "None, free stock"
-            )}
-          </Detail>
           <Detail label="Registered">{formatDate(container.created_at)}</Detail>
-        </dl>
+          <div className="sm:col-span-2">
+            <Detail label="Linked order">
+              {container.current_order ? (
+                <span className="flex flex-wrap items-center gap-2">
+                  <Link
+                    href={`/orders/${container.current_order.id}`}
+                    className="font-medium text-primary hover:underline"
+                  >
+                    {container.current_order.order_number}
+                  </Link>
+                  <OrderStatusBadge status={container.current_order.status as OrderStatus} />
+                  <span className="text-muted-foreground">
+                    {container.current_order.customer_name}
+                  </span>
+                </span>
+              ) : (
+                "None, free stock"
+              )}
+            </Detail>
+          </div>
+        </DetailGrid>
       </Card>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader
-            title={`Order History (${container.orders.length})`}
-            description="Every order this container has been packed for."
+            title="Order history"
+            description={`${container.orders.length} ${container.orders.length === 1 ? "order" : "orders"}`}
           />
           {container.orders.length === 0 ? (
             <EmptyState>This container has not been on an order yet.</EmptyState>
@@ -77,9 +73,8 @@ export function ContainerDetailView({ container }: { container: ContainerDetail 
               <thead>
                 <tr>
                   <Th>Order</Th>
-                  <Th>Customer</Th>
-                  <Th>Status</Th>
-                  <Th>Placed</Th>
+                  <Th className="text-center">Status</Th>
+                  <Th className="text-center">Placed</Th>
                 </tr>
               </thead>
               <tbody>
@@ -92,12 +87,14 @@ export function ContainerDetailView({ container }: { container: ContainerDetail 
                       >
                         {order.order_number}
                       </Link>
+                      <div className="text-xs text-muted-foreground">
+                        {order.customer_name ?? "—"}
+                      </div>
                     </Td>
-                    <Td>{order.customer_name ?? "—"}</Td>
-                    <Td>
+                    <Td className="text-center">
                       <OrderStatusBadge status={order.status as OrderStatus} />
                     </Td>
-                    <Td>{formatDate(order.created_at)}</Td>
+                    <Td className="text-center">{formatDate(order.created_at)}</Td>
                   </tr>
                 ))}
               </tbody>
@@ -106,10 +103,7 @@ export function ContainerDetailView({ container }: { container: ContainerDetail 
         </Card>
 
         <Card>
-          <CardHeader
-            title="Movement History"
-            description="Every status and location change, newest first."
-          />
+          <CardHeader title="Movement history" description="Newest first" />
           {container.history.length === 0 ? (
             <EmptyState>No movements recorded.</EmptyState>
           ) : (
@@ -147,6 +141,6 @@ export function ContainerDetailView({ container }: { container: ContainerDetail 
           )}
         </Card>
       </div>
-    </div>
+    </Page>
   );
 }

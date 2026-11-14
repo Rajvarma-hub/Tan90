@@ -55,6 +55,11 @@
   * {
     border-color: var(--border);
   }
+
+  /* Reserve the scrollbar's width so centered content doesn't jump when page height changes. */
+  html {
+    scrollbar-gutter: stable;
+  }
 }
 
 body {

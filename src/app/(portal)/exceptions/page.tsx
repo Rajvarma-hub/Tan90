@@ -7,11 +7,7 @@ import { getExceptions } from "@/features/exceptions/queries";
 export const metadata: Metadata = { title: "Exceptions" };
 
 async function Exceptions() {
-  return (
-    <div className="p-4">
-      <ExceptionList exceptions={await getExceptions()} />
-    </div>
-  );
+  return <ExceptionList exceptions={await getExceptions()} />;
 }
 
 export default function ExceptionsPage() {

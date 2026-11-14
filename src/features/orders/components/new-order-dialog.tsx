@@ -121,13 +121,13 @@ export function NewOrderDialog({ options }: { options: OrderFormOptions }) {
                 <Select
                   required
                   className="flex-1"
-                  aria-label="Asset"
+                  aria-label="Product"
                   value={line.productId}
                   onChange={(event) =>
                     updateLine(line.key, { productId: event.target.value })
                   }
                 >
-                  <option value="">Select asset</option>
+                  <option value="">Select product</option>
                   {options.products.map((product) => (
                     <option key={product.id} value={product.id}>
                       {product.label}

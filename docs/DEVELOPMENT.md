@@ -53,8 +53,14 @@ git clone <repo-url> tan90 && cd tan90
 
 # Terminal 1: API
 cd backend
-python -m venv .venv
-# Windows: .venv\Scripts\activate    macOS/Linux: source .venv/bin/activate
+# Windows PowerShell
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --port 8001 --reload
+
+# macOS/Linux
+python3.12 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements-dev.txt
 uvicorn app.main:app --port 8001 --reload
 

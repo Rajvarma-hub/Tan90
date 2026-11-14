@@ -2,17 +2,19 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Plus } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { EmptyState } from "@/components/ui/card";
+import { Card, CardHeader, EmptyState } from "@/components/ui/card";
 import { Dialog } from "@/components/ui/dialog";
 import { Field, FormError, Input, Select } from "@/components/ui/form";
+import { Page, PageHeader, Stat, StatGrid, Toolbar } from "@/components/ui/page";
 import { Tabs } from "@/components/ui/tabs";
 import { recordMovement } from "@/features/inventory/actions";
 import type { Product, Station, StockMovement } from "@/features/inventory/types";
 import { useServerAction } from "@/hooks/use-server-action";
 import { formatDay, formatNumber, formatTime, humanize } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
 const KINDS = [
   { value: "NEW_INVENTORY", label: "New inventory (inward)" },
@@ -84,13 +86,13 @@ function RecordMovementDialog({
               ))}
             </Select>
           </Field>
-          <Field label="Asset">
+          <Field label="Product">
             <Select
               required
               value={productId}
               onChange={(event) => setProductId(event.target.value)}
             >
-              <option value="">Select asset</option>
+              <option value="">Select product</option>
               {products.map((product) => (
                 <option key={product.id} value={product.id}>
                   {product.name}
@@ -99,7 +101,7 @@ function RecordMovementDialog({
             </Select>
           </Field>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label={transfer ? "From" : "Station"}>
+            <Field label={transfer ? "From" : "Location"}>
               <Select
                 required
                 value={locationId}
@@ -169,9 +171,11 @@ function RecordMovementDialog({
 function MovementRow({
   movement,
   locationCode,
+  onProduct,
 }: {
   movement: StockMovement;
   locationCode: Map<string, string>;
+  onProduct: (productId: string) => void;
 }) {
   const inward = movement.direction === "INWARD";
   const Icon = inward ? ArrowDownLeft : ArrowUpRight;
@@ -200,35 +204,37 @@ function MovementRow({
   }
 
   return (
-    <li className="flex gap-3">
+    <li className="flex items-center gap-4 px-4 py-3.5">
       <span
-        className={
-          inward
-            ? "mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full border border-emerald-500/40 text-emerald-400"
-            : "mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full border border-orange-500/40 text-orange-400"
-        }
+        className={cn(
+          "flex size-9 shrink-0 items-center justify-center rounded-lg",
+          inward ? "bg-emerald-500/10 text-emerald-400" : "bg-orange-500/10 text-orange-400",
+        )}
       >
         <Icon className="size-4" />
       </span>
-      <div className="min-w-0 text-sm">
-        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-card-foreground">
-          <Badge tone={inward ? "green" : "orange"}>
-            {inward ? "Inward" : "Outward"}
-          </Badge>
-          <Badge>{humanize(movement.reason)}</Badge>
-          <span>
-            <span className="font-semibold tabular-nums">
-              {formatNumber(movement.quantity)} ×
-            </span>{" "}
+      <div className="min-w-0 flex-1 text-sm">
+        <p className="text-card-foreground">
+          <span className="font-semibold tabular-nums">
+            {formatNumber(movement.quantity)} ×
+          </span>{" "}
+          <button
+            type="button"
+            title="Show only this product"
+            onClick={() => onProduct(movement.product_id)}
+            className="cursor-pointer hover:text-primary hover:underline"
+          >
             {movement.product_name}
-            <span className="text-muted-foreground">{counterparty}</span>
-          </span>
+          </button>
+          <span className="text-muted-foreground">{counterparty}</span>
         </p>
-        <p className="mt-1 text-xs text-muted-foreground">
-          {formatTime(movement.occurred_at)} · {movement.location_code}
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          {humanize(movement.reason)} · {movement.location_code} ·{" "}
+          {formatTime(movement.occurred_at)}
         </p>
         {footnote && <p className="text-xs text-muted-foreground">{footnote}</p>}
       </div>
+      <Badge tone={inward ? "green" : "orange"}>{inward ? "Inward" : "Outward"}</Badge>
     </li>
   );
 }
@@ -274,93 +280,127 @@ export function Movements({
   }, [movements, direction, reason, locationId, productId]);
 
   const shown = days.reduce((sum, [, list]) => sum + list.length, 0);
+  const inwardCount = movements.filter((m) => m.direction === "INWARD").length;
+  const netUnits = movements.reduce(
+    (sum, m) => sum + (m.direction === "INWARD" ? m.quantity : -m.quantity),
+    0,
+  );
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <span className="flex size-10 items-center justify-center rounded-lg border bg-card text-primary">
-            <ArrowLeftRight className="size-5" />
-          </span>
-          <div>
-            <h1 className="text-xl font-medium text-card-foreground">Movements</h1>
-            <p className="text-sm text-muted-foreground">
-              {shown} of {movements.length} movements across all stations
-            </p>
-          </div>
-        </div>
-        <RecordMovementDialog products={products} stations={stations} />
-      </div>
+    <Page>
+      <PageHeader
+        title="Movements"
+        description="Every inward and outward stock change across all locations."
+        actions={<RecordMovementDialog products={products} stations={stations} />}
+      />
 
-      <div className="flex flex-wrap gap-3">
-        <Tabs
-          value={direction}
-          onChange={setDirection}
-          options={[
-            { value: "ALL", label: "All" },
-            { value: "INWARD", label: "Inward" },
-            { value: "OUTWARD", label: "Outward" },
-          ]}
+      <StatGrid>
+        <Stat
+          label="Total movements"
+          value={formatNumber(movements.length)}
+          active={direction === "ALL"}
+          onClick={() => setDirection("ALL")}
         />
-        <Select
-          className="w-44"
-          aria-label="Type"
-          value={reason}
-          onChange={(event) => setReason(event.target.value)}
-        >
-          <option value="">All types</option>
-          {reasons.map((value) => (
-            <option key={value} value={value}>
-              {humanize(value)}
-            </option>
-          ))}
-        </Select>
-        <Select
-          className="w-44"
-          aria-label="Station"
-          value={locationId}
-          onChange={(event) => setLocationId(event.target.value)}
-        >
-          <option value="">All stations</option>
-          {stations.map((station) => (
-            <option key={station.id} value={station.id}>
-              {station.code}
-            </option>
-          ))}
-        </Select>
-        <Select
-          className="w-56"
-          aria-label="Asset"
-          value={productId}
-          onChange={(event) => setProductId(event.target.value)}
-        >
-          <option value="">All assets</option>
-          {products.map((product) => (
-            <option key={product.id} value={product.id}>
-              {product.name}
-            </option>
-          ))}
-        </Select>
-      </div>
+        <Stat
+          label="Inward"
+          value={formatNumber(inwardCount)}
+          active={direction === "INWARD"}
+          onClick={() => setDirection("INWARD")}
+        />
+        <Stat
+          label="Outward"
+          value={formatNumber(movements.length - inwardCount)}
+          active={direction === "OUTWARD"}
+          onClick={() => setDirection("OUTWARD")}
+        />
+        <Stat
+          label="Net units"
+          value={`${netUnits > 0 ? "+" : ""}${formatNumber(netUnits)}`}
+        />
+      </StatGrid>
 
-      {days.length === 0 ? (
-        <EmptyState>No movements match these filters.</EmptyState>
-      ) : (
-        days.map(([day, list]) => (
-          <section key={day}>
-            <h2 className="mb-3 text-sm font-medium text-muted-foreground">{day}</h2>
-            <ul className="grid gap-4">
-              {list.map((movement) => (
-                <MovementRow
-                  key={movement.id}
-                  movement={movement}
-                  locationCode={locationCode}
-                />
-              ))}
-            </ul>
-          </section>
-        ))
-      )}
-    </div>
+      <Card>
+        <CardHeader
+          title="Movement log"
+          description={`${shown} of ${movements.length} shown`}
+          actions={
+            <Tabs
+              value={direction}
+              onChange={setDirection}
+              options={[
+                { value: "ALL", label: "All" },
+                { value: "INWARD", label: "Inward" },
+                { value: "OUTWARD", label: "Outward" },
+              ]}
+            />
+          }
+        />
+        <Toolbar>
+          <Select
+            className="w-48"
+            aria-label="Type"
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+          >
+            <option value="">All types</option>
+            {reasons.map((value) => (
+              <option key={value} value={value}>
+                {humanize(value)}
+              </option>
+            ))}
+          </Select>
+          <Select
+            className="w-48"
+            aria-label="Location"
+            value={locationId}
+            onChange={(event) => setLocationId(event.target.value)}
+          >
+            <option value="">All locations</option>
+            {stations.map((station) => (
+              <option key={station.id} value={station.id}>
+                {station.code}
+              </option>
+            ))}
+          </Select>
+          <Select
+            className="w-48"
+            aria-label="Product"
+            value={productId}
+            onChange={(event) => setProductId(event.target.value)}
+          >
+            <option value="">All products</option>
+            {products.map((product) => (
+              <option key={product.id} value={product.id}>
+                {product.name}
+              </option>
+            ))}
+          </Select>
+        </Toolbar>
+
+        {days.length === 0 ? (
+          <EmptyState>No movements match these filters.</EmptyState>
+        ) : (
+          <div className="grid gap-5">
+            {days.map(([day, list]) => (
+              <section key={day}>
+                <h3 className="mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                  {day}
+                </h3>
+                <ul className="divide-y divide-border/60 rounded-lg border border-border/60">
+                  {list.map((movement) => (
+                    <MovementRow
+                      key={movement.id}
+                      movement={movement}
+                      locationCode={locationCode}
+                      onProduct={setProductId}
+                    />
+                  ))}
+                </ul>
+              </section>
+            ))}
+          </div>
+        )}
+      </Card>
+    </Page>
   );
 }

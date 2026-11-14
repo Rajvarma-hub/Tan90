@@ -3,11 +3,13 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { PlusCircle } from "lucide-react";
+import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, EmptyState } from "@/components/ui/card";
 import { Dialog } from "@/components/ui/dialog";
 import { Field, FormError, Input, Select } from "@/components/ui/form";
+import { Page, PageHeader, Stat, StatGrid, Toolbar } from "@/components/ui/page";
+import { PAGE_SIZE, Pagination } from "@/components/ui/pagination";
 import { ScanInput } from "@/components/ui/scan-input";
 import { Table, Td, Th } from "@/components/ui/table";
 import { lookupContainer, registerContainer } from "@/features/containers/actions";
@@ -23,12 +25,9 @@ import type {
   ContainerSummary,
   ContainerType,
 } from "@/features/containers/types";
-import { OrderStatusBadge } from "@/features/orders/components/order-status-badge";
-import type { Option, OrderStatus } from "@/features/orders/types";
+import type { Option } from "@/features/orders/types";
 import { useServerAction } from "@/hooks/use-server-action";
-import { cn } from "@/lib/utils";
-
-const PAGE_SIZE = 15;
+import { formatNumber } from "@/lib/format";
 
 function RegisterDialog({
   types,
@@ -60,7 +59,7 @@ function RegisterDialog({
           setOpen(true);
         }}
       >
-        <PlusCircle /> Register Container
+        <Plus /> Register Container
       </Button>
       <Dialog
         open={open}
@@ -187,8 +186,14 @@ export function ContainerList({
   const resetPage = () => setPage(1);
 
   return (
-    <div className="flex flex-col gap-4">
-      <ul className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+    <Page>
+      <PageHeader
+        title="Containers"
+        description="Containers tracked by RFID tag and barcode label."
+        actions={<RegisterDialog types={types} stations={stations} />}
+      />
+
+      <StatGrid>
         {containerBuckets.map((bucket) => {
           const count = bucket.statuses.reduce(
             (sum, value) => sum + (summary.by_status[value] ?? 0),
@@ -196,39 +201,29 @@ export function ContainerList({
           );
           const active = statuses === bucket.statuses;
           return (
-            <li key={bucket.label}>
-              <button
-                type="button"
-                aria-pressed={active}
-                onClick={() => {
-                  setStatuses(active ? null : bucket.statuses);
-                  setStatus("");
-                  resetPage();
-                }}
-                className={cn(
-                  "w-full rounded-xl border bg-card p-4 text-left transition-colors hover:border-primary/60",
-                  active && "border-primary ring-1 ring-primary",
-                )}
-              >
-                <div className="text-2xl font-semibold text-card-foreground tabular-nums">
-                  {count}
-                </div>
-                <div className="text-sm text-muted-foreground">{bucket.label}</div>
-              </button>
-            </li>
+            <Stat
+              key={bucket.label}
+              label={bucket.label}
+              value={formatNumber(count)}
+              active={active}
+              onClick={() => {
+                setStatuses(active ? null : bucket.statuses);
+                setStatus("");
+                resetPage();
+              }}
+            />
           );
         })}
-      </ul>
+      </StatGrid>
 
       <Card>
         <CardHeader
-          title="Asset Management"
-          description={`${summary.total} containers tracked by RFID tag and barcode label.`}
-          actions={<RegisterDialog types={types} stations={stations} />}
+          title="All containers"
+          description={`${filtered.length} of ${summary.total} shown`}
         />
 
-        <div className="mb-3 grid gap-3 lg:grid-cols-2">
-          <div>
+        <Toolbar>
+          <div className="min-w-56 flex-1">
             <ScanInput
               placeholder="Scan a container to open it"
               disabled={lookup.pending}
@@ -242,6 +237,7 @@ export function ContainerList({
           </div>
           <Input
             type="search"
+            className="min-w-56 flex-1"
             placeholder="Search code, tag, order, customer…"
             value={search}
             onChange={(event) => {
@@ -249,9 +245,8 @@ export function ContainerList({
               resetPage();
             }}
           />
-        </div>
-        <div className="mb-4 grid gap-3 sm:grid-cols-3">
           <Select
+            className="w-48"
             aria-label="Status"
             value={status}
             onChange={(event) => {
@@ -260,7 +255,7 @@ export function ContainerList({
               resetPage();
             }}
           >
-            <option value="">All Statuses</option>
+            <option value="">All statuses</option>
             {containerStatuses.map((value) => (
               <option key={value} value={value}>
                 {containerStatusMeta[value].label}
@@ -268,6 +263,7 @@ export function ContainerList({
             ))}
           </Select>
           <Select
+            className="w-48"
             aria-label="Location"
             value={locationId}
             onChange={(event) => {
@@ -275,7 +271,7 @@ export function ContainerList({
               resetPage();
             }}
           >
-            <option value="">All Locations</option>
+            <option value="">All locations</option>
             {stations.map((station) => (
               <option key={station.id} value={station.id}>
                 {station.label}
@@ -283,6 +279,7 @@ export function ContainerList({
             ))}
           </Select>
           <Select
+            className="w-48"
             aria-label="Type"
             value={type}
             onChange={(event) => {
@@ -290,14 +287,14 @@ export function ContainerList({
               resetPage();
             }}
           >
-            <option value="">All Types</option>
+            <option value="">All types</option>
             {types.map((value) => (
               <option key={value.code} value={value.name}>
                 {value.name}
               </option>
             ))}
           </Select>
-        </div>
+        </Toolbar>
 
         {rows.length === 0 ? (
           <EmptyState>No containers match these filters.</EmptyState>
@@ -306,10 +303,10 @@ export function ContainerList({
             <thead>
               <tr>
                 <Th>Container</Th>
-                <Th>Type</Th>
-                <Th>Status</Th>
-                <Th>Where</Th>
-                <Th>Linked Order</Th>
+                <Th className="text-center">Type</Th>
+                <Th className="text-center">Status</Th>
+                <Th>Location</Th>
+                <Th>Order</Th>
               </tr>
             </thead>
             <tbody>
@@ -326,8 +323,8 @@ export function ContainerList({
                       {container.epc ?? "No tag"}
                     </div>
                   </Td>
-                  <Td>{container.container_type}</Td>
-                  <Td>
+                  <Td className="text-center">{container.container_type}</Td>
+                  <Td className="text-center">
                     <ContainerStatusBadge status={container.status} />
                   </Td>
                   <Td>
@@ -338,20 +335,17 @@ export function ContainerList({
                   </Td>
                   <Td>
                     {container.current_order ? (
-                      <div className="flex flex-wrap items-center gap-2">
+                      <>
                         <Link
                           href={`/orders/${container.current_order.id}`}
                           className="font-medium hover:text-primary hover:underline"
                         >
                           {container.current_order.order_number}
                         </Link>
-                        <OrderStatusBadge
-                          status={container.current_order.status as OrderStatus}
-                        />
-                        <span className="w-full text-xs text-muted-foreground">
+                        <div className="text-xs text-muted-foreground">
                           {container.current_order.customer_name}
-                        </span>
-                      </div>
+                        </div>
+                      </>
                     ) : (
                       <span className="text-muted-foreground">—</span>
                     )}
@@ -362,28 +356,14 @@ export function ContainerList({
           </Table>
         )}
 
-        <div className="mt-4 flex items-center gap-3 text-sm text-muted-foreground">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={currentPage === 1}
-            onClick={() => setPage(currentPage - 1)}
-          >
-            Previous
-          </Button>
-          <span>
-            Page {currentPage} of {pageCount} · {filtered.length} containers
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={currentPage === pageCount}
-            onClick={() => setPage(currentPage + 1)}
-          >
-            Next
-          </Button>
-        </div>
+        <Pagination
+          page={currentPage}
+          pageCount={pageCount}
+          total={filtered.length}
+          noun={filtered.length === 1 ? "container" : "containers"}
+          onPage={setPage}
+        />
       </Card>
-    </div>
+    </Page>
   );
 }

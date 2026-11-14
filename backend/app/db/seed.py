@@ -102,6 +102,32 @@ def _notif_role(db: Session, role: str, kind: str, title: str, body: str,
                         created_at=at))
 
 
+def _stock(db: Session, product_id: str, location_id: str, delta: int,
+           reason: str, ref_type: str, ref_id: str, actor: str,
+           at: datetime) -> None:
+    """Mirror of services.inventory.apply_movement with a backdated timestamp."""
+    bal = db.query(InventoryBalance).filter_by(
+        product_id=product_id, location_id=location_id).first()
+    if bal is None:
+        bal = InventoryBalance(product_id=product_id, location_id=location_id,
+                               quantity=0)
+        db.add(bal)
+        db.flush()
+    bal.quantity += delta
+    assert bal.quantity >= 0, f"seed would drive {product_id}@{location_id} negative"
+    db.add(InventoryMovement(
+        product_id=product_id, location_id=location_id, delta=delta,
+        reason=reason, reference_type=ref_type, reference_id=ref_id,
+        actor_id=actor, occurred_at=at,
+    ))
+
+
+def _transfer(db: Session, product_id: str, src: str, dst: str, qty: int,
+              actor: str, at: datetime) -> None:
+    _stock(db, product_id, src, -qty, "INTERNAL_TRANSFER", "LOCATION", dst, actor, at)
+    _stock(db, product_id, dst, qty, "INTERNAL_TRANSFER", "LOCATION", src, actor, at)
+
+
 # ═══════════════════════════════════════════════════════════════════════
 #  Pipeline helpers
 # ═══════════════════════════════════════════════════════════════════════
@@ -162,6 +188,10 @@ def step_dispatch(db, order, sess, driver_id, vehicle, actor, at):
         db.add(DispatchItem(dispatch_id=dispatch.id, container_id=c.id))
         _cm(db, c, "IN_TRANSIT_TO_CUSTOMER", "DISPATCHED",
             "DISPATCH", dispatch.id, actor, at)
+    # Ordered panels leave the station's stock when the vehicle is loaded.
+    for line in db.query(OrderItem).filter_by(order_id=order.id).all():
+        _stock(db, line.product_id, order.station_id, -line.quantity, "SALES",
+               "ORDER", order.id, actor, at)
     task = DeliveryTask(dispatch_id=dispatch.id, driver_id=driver_id,
                         status="ASSIGNED", created_at=at)
     db.add(task)
@@ -207,8 +237,9 @@ def step_deliver(db, order, task, actor, at):
 
 
 def step_confirm(db, order, sess, customer_id, customer_user,
-                 actor, at, missing_ids=None):
+                 actor, at, missing_ids=None, damaged_ids=None):
     missing_ids = set(missing_ids or [])
+    damaged_ids = set(damaged_ids or [])
     for item in sess.items:
         c = db.get(Container, item.container_id)
         if c.id in missing_ids:
@@ -219,14 +250,23 @@ def step_confirm(db, order, sess, customer_id, customer_user,
                 created_at=at,
             ))
             continue
-        _cm(db, c, "WITH_CUSTOMER", "CUSTOMER_CONFIRMED_RECEIPT",
+        reason = ("CUSTOMER_REPORTED_DAMAGE" if c.id in damaged_ids
+                  else "CUSTOMER_CONFIRMED_RECEIPT")
+        _cm(db, c, "WITH_CUSTOMER", reason,
             "ORDER", order.id, customer_user, at, customer_id=customer_id)
+        if c.id in damaged_ids:
+            db.add(ExceptionRecord(
+                kind="DAMAGED_ON_DELIVERY", severity="WARNING", status="OPEN",
+                reference_type="ORDER", reference_id=order.id,
+                details_json=json.dumps({"container_id": c.id}),
+                created_at=at,
+            ))
 
     order.customer_confirmed_at = at
-    if missing_ids:
+    if missing_ids or damaged_ids:
         order.status = "DISPUTED"
         _oe(db, order, "dispute", "DELIVERED", "DISPUTED", customer_user, at,
-            notes=f"{len(missing_ids)} container(s) missing")
+            notes=f"{len(missing_ids)} missing, {len(damaged_ids)} damaged")
         _al(db, "order", order.id, "ORDER_DISPUTED", customer_user, at)
     else:
         order.status = "CUSTOMER_CONFIRMED"
@@ -395,11 +435,27 @@ def seed_reference(db: Session):
              password_hash=pw, role="CUSTOMER", customer_id="cust-medplus"),
         User(id="usr-sc", email="sc@tan90.local", full_name="Supply Chain Manager",
              password_hash=pw, role="SUPPLY_CHAIN_MANAGER"),
+        User(id="usr-fshyd", email="fshyd@tan90.local", full_name="Anita (FS-HYD)",
+             password_hash=pw, role="FREEZING_STATION_MANAGER", location_id="loc-fs-hyd"),
+        User(id="usr-fsdel", email="fsdel@tan90.local", full_name="Rohit (FS-DEL)",
+             password_hash=pw, role="FREEZING_STATION_MANAGER", location_id="loc-fs-del"),
+        User(id="usr-packer4", email="packer4@tan90.local", full_name="Packer D (FS-HYD)",
+             password_hash=pw, role="PACKING_WORKER", location_id="loc-fs-hyd"),
+        User(id="usr-packer5", email="packer5@tan90.local", full_name="Packer E (FS-DEL)",
+             password_hash=pw, role="PACKING_WORKER", location_id="loc-fs-del"),
+        User(id="usr-driver4", email="driver4@tan90.local", full_name="Imran (HYD/DEL)",
+             password_hash=pw, role="DRIVER"),
+        User(id="usr-zepto", email="zepto@tan90.local", full_name="Zepto Ops",
+             password_hash=pw, role="CUSTOMER", customer_id="cust-zepto"),
+        User(id="usr-kisaan", email="kisaan@tan90.local", full_name="Kisaan Ops",
+             password_hash=pw, role="CUSTOMER", customer_id="cust-kisaan"),
     ])
 
     db.add_all([
         Product(id="prd-pcm-neg50", sku="PCM-NEG50",
                 name="PCM Panel -50 C (Ultra-cold Vaccine)", setpoint_c=-50.0),
+        Product(id="prd-pcm-neg30", sku="PCM-NEG30",
+                name="PCM Panel -30 C (Seafood)", setpoint_c=-30.0),
         Product(id="prd-pcm-neg24", sku="PCM-NEG24",
                 name="PCM Panel -24 C (Frozen)", setpoint_c=-24.0),
         Product(id="prd-pcm-neg18", sku="PCM-NEG18",
@@ -407,13 +463,17 @@ def seed_reference(db: Session):
         Product(id="prd-pcm-neg10", sku="PCM-NEG10",
                 name="PCM Panel -10 C (Chilled)", setpoint_c=-10.0),
         Product(id="prd-pcm-sachet", sku="PCM-SACHET-100",
-                name="PCM Sachet 100ml", setpoint_c=-10.0),
+                name="PCM Sachet 100ml", setpoint_c=-10.0, unit="sachet"),
+        Product(id="prd-pcm-pos2", sku="PCM-POS2",
+                name="PCM Panel +2 C (Legacy)", setpoint_c=2.0, is_active=False),
         Product(id="prd-pcm-pos5", sku="PCM-POS5",
                 name="PCM Panel +5 C (Pharma 2-8 C)", setpoint_c=5.0),
         Product(id="prd-bag-lastmile", sku="BAG-LASTMILE",
-                name="Last Mile Delivery Bag", setpoint_c=5.0),
+                name="Last Mile Delivery Bag", setpoint_c=5.0, unit="bag"),
         Product(id="prd-pcm-pos15", sku="PCM-POS15",
                 name="PCM Panel +15 C (Warm Chain)", setpoint_c=15.0),
+        Product(id="prd-gel-kit", sku="ACC-GELKIT",
+                name="Gel Pack Accessory Kit", setpoint_c=None, unit="kit"),
     ])
 
 
@@ -441,22 +501,91 @@ def seed_containers(db: Session):
                 db.add(RFIDTag(id=f"tag-{n:06d}", epc=epc_for(n),
                                container_id=cid, active=True))
 
+    # con-000061 has no RFID tag yet (barcode only).
+    type_name, capacity = CONTAINER_TYPES["SHIP-20"]
+    db.add(Container(id="con-000061", container_code="CON-000061",
+                     container_type=type_name, capacity_litres=capacity,
+                     status="AVAILABLE", current_location_id="loc-fs-blr"))
+
+    # con-000062 had its tag replaced: old tag inactive, new tag active.
+    db.add(Container(id="con-000062", container_code="CON-000062",
+                     container_type=type_name, capacity_litres=capacity,
+                     status="AVAILABLE", current_location_id="loc-fs-blr"))
+    db.add(RFIDTag(id="tag-000062-old", epc=epc_for(9062), container_id="con-000062",
+                   active=False, created_at=ago(days=30), replaced_at=ago(days=6)))
+    db.add(RFIDTag(id="tag-000062", epc=epc_for(62), container_id="con-000062",
+                   active=True, created_at=ago(days=6)))
+
 
 def seed_inventory(db: Session):
-    for loc in ("loc-fs-blr", "loc-fs-chn", "loc-fs-hyd", "loc-fs-del"):
-        for pid in ("prd-pcm-neg50", "prd-pcm-neg24", "prd-pcm-neg18",
-                    "prd-pcm-neg10", "prd-pcm-sachet", "prd-pcm-pos5",
-                    "prd-bag-lastmile", "prd-pcm-pos15"):
-            db.add(InventoryBalance(
-                id=f"inv-{loc}-{pid}", product_id=pid,
-                location_id=loc, quantity=50,
-            ))
-            db.add(InventoryMovement(
-                product_id=pid, location_id=loc, delta=50,
-                reason="NEW_INVENTORY", reference_type="MANUAL",
-                reference_id="Opening stock", actor_id="usr-ops1",
-                occurred_at=ago(days=20),
-            ))
+    """Opening stock, supplier receipts, transfers, write-offs and adjustments.
+
+    Dispatch-time SALES movements are added later by step_dispatch.
+    """
+    OPS, FSB, FSC, FSH, FSD, WHB, WHC = (
+        "usr-ops1", "usr-fsblr", "usr-fschn", "usr-fshyd", "usr-fsdel",
+        "usr-whblr", "usr-whchn")
+    BLR, CHN, HYD, DEL = "loc-fs-blr", "loc-fs-chn", "loc-fs-hyd", "loc-fs-del"
+    WBLR, WCHN = "loc-wh-blr", "loc-wh-chn"
+
+    # Opening stock per station (columns: neg50 neg24 neg18 neg10 sachet pos5 bag pos15).
+    pids = ("prd-pcm-neg50", "prd-pcm-neg24", "prd-pcm-neg18", "prd-pcm-neg10",
+            "prd-pcm-sachet", "prd-pcm-pos5", "prd-bag-lastmile", "prd-pcm-pos15")
+    opening = {
+        BLR: (40, 120, 80, 60, 200, 90, 30, 25),
+        CHN: (25, 90, 60, 45, 150, 120, 20, 18),
+        HYD: (15, 70, 50, 40, 100, 60, 25, 12),
+        DEL: (20, 60, 45, 30, 80, 70, 18, 10),
+    }
+    for loc, quantities in opening.items():
+        for pid, qty in zip(pids, quantities):
+            _stock(db, pid, loc, qty, "NEW_INVENTORY", "MANUAL", "Opening stock",
+                   OPS, ago(days=20))
+
+    # Legacy product: stocked once, then fully written off (zero stock everywhere).
+    _stock(db, "prd-pcm-pos2", BLR, 20, "NEW_INVENTORY", "MANUAL",
+           "Opening stock", OPS, ago(days=20))
+    _stock(db, "prd-pcm-pos2", BLR, -20, "DAMAGED", "MANUAL",
+           "Discontinued, written off", FSB, ago(days=9))
+    # prd-pcm-neg30 is intentionally never stocked: no balance rows at all.
+
+    # Supplier receipts, including warehouses and a no-setpoint accessory.
+    _stock(db, "prd-pcm-neg24", BLR, 60, "NEW_INVENTORY", "MANUAL",
+           "Supplier: CoolChem, challan CH-2201", FSB, ago(days=12))
+    _stock(db, "prd-pcm-pos5", CHN, 80, "NEW_INVENTORY", "MANUAL",
+           "Supplier: PCM Labs, challan PL-8841", FSC, ago(days=12, minutes=90))
+    _stock(db, "prd-pcm-sachet", WBLR, 500, "NEW_INVENTORY", "MANUAL",
+           "Supplier: GelWorks, PO-5521", WHB, ago(days=11))
+    _stock(db, "prd-pcm-neg18", WCHN, 200, "NEW_INVENTORY", "MANUAL",
+           "Supplier: CoolChem, challan CH-2237", WHC, ago(days=11, minutes=45))
+    _stock(db, "prd-pcm-neg50", HYD, 30, "NEW_INVENTORY", "MANUAL",
+           "Supplier: CryoPack, challan CP-310", FSH, ago(days=10))
+    _stock(db, "prd-gel-kit", WBLR, 300, "NEW_INVENTORY", "MANUAL",
+           "Supplier: GelWorks, PO-5530", WHB, ago(days=10, minutes=30))
+    _stock(db, "prd-gel-kit", BLR, 40, "NEW_INVENTORY", "MANUAL",
+           "Supplier: GelWorks, PO-5530", FSB, ago(days=10))
+
+    # Internal transfers between stations and warehouses.
+    _transfer(db, "prd-pcm-neg10", BLR, WBLR, 25, OPS, ago(days=8))
+    _transfer(db, "prd-pcm-neg18", WCHN, CHN, 40, WHC, ago(days=8, minutes=60))
+    _transfer(db, "prd-pcm-neg24", HYD, DEL, 20, FSH, ago(days=7))
+    _transfer(db, "prd-pcm-sachet", WBLR, BLR, 100, WHB, ago(days=7, minutes=120))
+    _transfer(db, "prd-gel-kit", WBLR, CHN, 60, OPS, ago(days=5))
+    _transfer(db, "prd-pcm-pos5", CHN, HYD, 30, FSC, ago(days=2))
+
+    # Damage write-offs (outward).
+    _stock(db, "prd-pcm-neg18", BLR, -3, "DAMAGED", "MANUAL",
+           "Cracked in handling", FSB, ago(days=6))
+    _stock(db, "prd-pcm-neg50", CHN, -2, "DAMAGED", "MANUAL",
+           "Freezer failure, thawed", FSC, ago(days=4))
+
+    # Stock adjustments (inward and outward); the last one zeroes a station balance.
+    _stock(db, "prd-bag-lastmile", HYD, 5, "ADJUSTMENT_IN", "MANUAL",
+           "Cycle count correction", FSH, ago(days=4, minutes=30))
+    _stock(db, "prd-pcm-sachet", BLR, -12, "ADJUSTMENT_OUT", "MANUAL",
+           "Cycle count correction", FSB, ago(days=3))
+    _stock(db, "prd-pcm-pos15", DEL, -10, "ADJUSTMENT_OUT", "MANUAL",
+           "Expired, written off", FSD, ago(days=3, minutes=90))
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -870,18 +999,162 @@ def seed_orders(db: Session):
                  {"con-000028": "DAMAGED"}, "loc-fs-chn", FS_C,
                  t0 + timedelta(minutes=1750))
 
+    # Hyderabad and Delhi stations, with their own drivers and customers.
+    FS_H, FS_D, PK4, PK5, DR4 = ("usr-fshyd", "usr-fsdel", "usr-packer4",
+                                  "usr-packer5", "usr-driver4")
+    CZ, CK = "usr-zepto", "usr-kisaan"
+
+    # ─── ord-16: DISPUTED (one container reported damaged) ─────────
+    t0 = ago(days=4)
+    o = Order(id="ord-16", order_number="ORD-0016",
+              customer_id="cust-zepto", station_id="loc-fs-hyd",
+              destination="Zepto Dark Store, Madhapur",
+              status="PENDING_OPS_APPROVAL", created_by=OP1, created_at=t0,
+              expected_delivery_at=t0 + timedelta(days=1))
+    db.add(o)
+    db.add(OrderItem(id="oi-ord-16-1", order_id="ord-16",
+                     product_id="prd-pcm-pos5", quantity=4))
+    db.add(OrderItem(id="oi-ord-16-2", order_id="ord-16",
+                     product_id="prd-bag-lastmile", quantity=2))
+    _oe(db, o, "create", "—", "PENDING_OPS_APPROVAL", CZ, t0)
+    step_approve(db, o, OP1, "loc-fs-hyd", t0 + timedelta(minutes=20))
+    sess = step_start_packing(db, o, PK4, t0 + timedelta(minutes=60))
+    step_scan(db, o, sess, [
+        (db.get(Container, "con-000037"), [{"sku": "PCM-POS5", "qty": 4}]),
+        (db.get(Container, "con-000041"), [{"sku": "BAG-LASTMILE", "qty": 2}]),
+    ], PK4, t0 + timedelta(minutes=90))
+    step_complete_packing(db, o, sess, PK4, t0 + timedelta(minutes=120))
+    _, task = step_dispatch(db, o, sess, DR4, "TS-09-GH-4321", PK4,
+                            t0 + timedelta(minutes=180))
+    step_depart(db, o, task, DR4, t0 + timedelta(minutes=200))
+    step_arrive(db, o, task, DR4, t0 + timedelta(minutes=400))
+    step_deliver(db, o, task, DR4, t0 + timedelta(minutes=430))
+    step_confirm(db, o, sess, "cust-zepto", CZ, CZ,
+                 t0 + timedelta(minutes=500), damaged_ids=["con-000041"])
+
+    # ─── ord-17: RETURN_RECEIVED, one container contaminated ───────
+    t0 = ago(days=11)
+    o = Order(id="ord-17", order_number="ORD-0017",
+              customer_id="cust-kisaan", station_id="loc-fs-del",
+              destination="Kisaan Cold Store, Azadpur",
+              status="PENDING_OPS_APPROVAL", created_by=OP1, created_at=t0,
+              expected_delivery_at=t0 + timedelta(days=1))
+    db.add(o)
+    db.add(OrderItem(id="oi-ord-17-1", order_id="ord-17",
+                     product_id="prd-pcm-neg18", quantity=4))
+    _oe(db, o, "create", "—", "PENDING_OPS_APPROVAL", CK, t0)
+    step_approve(db, o, OP1, "loc-fs-del", t0 + timedelta(minutes=20))
+    sess = step_start_packing(db, o, PK5, t0 + timedelta(minutes=60))
+    step_scan(db, o, sess, [
+        (db.get(Container, "con-000045"), [{"sku": "PCM-NEG18", "qty": 2}]),
+        (db.get(Container, "con-000046"), [{"sku": "PCM-NEG18", "qty": 2}]),
+    ], PK5, t0 + timedelta(minutes=90))
+    step_complete_packing(db, o, sess, PK5, t0 + timedelta(minutes=120))
+    _, task = step_dispatch(db, o, sess, DR4, "DL-01-JK-7788", PK5,
+                            t0 + timedelta(minutes=180))
+    step_depart(db, o, task, DR4, t0 + timedelta(minutes=200))
+    step_arrive(db, o, task, DR4, t0 + timedelta(minutes=400))
+    step_deliver(db, o, task, DR4, t0 + timedelta(minutes=430))
+    step_confirm(db, o, sess, "cust-kisaan", CK, CK,
+                 t0 + timedelta(minutes=500))
+    ret = step_return_request(db, o, sess, "cust-kisaan", CK, CK,
+                              t0 + timedelta(minutes=1500))
+    step_return_assign(db, o, ret, DR4, OP1, t0 + timedelta(minutes=1560))
+    step_return_collect(db, o, ret, DR4, DR4, t0 + timedelta(minutes=1620))
+    step_return_receive(db, o, ret, FS_D, t0 + timedelta(minutes=1700))
+    step_inspect(db, o, ret, {"con-000046": "CONTAMINATED"}, "loc-fs-del", FS_D,
+                 t0 + timedelta(minutes=1750))
+
+    # ─── ord-18: PACKING with three product lines, two containers ──
+    t0 = ago(minutes=240)
+    o = Order(id="ord-18", order_number="ORD-0018",
+              customer_id="cust-zepto", station_id="loc-fs-hyd",
+              destination="Zepto Dark Store, Gachibowli",
+              status="PENDING_OPS_APPROVAL", created_by=OP1, created_at=t0,
+              expected_delivery_at=t0 + timedelta(days=1))
+    db.add(o)
+    db.add(OrderItem(id="oi-ord-18-1", order_id="ord-18",
+                     product_id="prd-pcm-neg24", quantity=6))
+    db.add(OrderItem(id="oi-ord-18-2", order_id="ord-18",
+                     product_id="prd-pcm-sachet", quantity=20))
+    db.add(OrderItem(id="oi-ord-18-3", order_id="ord-18",
+                     product_id="prd-gel-kit", quantity=2))
+    _oe(db, o, "create", "—", "PENDING_OPS_APPROVAL", CZ, t0)
+    step_approve(db, o, OP1, "loc-fs-hyd", t0 + timedelta(minutes=20))
+    sess = step_start_packing(db, o, PK4, t0 + timedelta(minutes=60))
+    step_scan(db, o, sess, [
+        (db.get(Container, "con-000038"),
+         [{"sku": "PCM-NEG24", "qty": 6}, {"sku": "PCM-SACHET-100", "qty": 20}]),
+    ], PK4, t0 + timedelta(minutes=90))
+
+    # ─── ord-19: CANCELLED while pending ───────────────────────────
+    t0 = ago(days=3, minutes=200)
+    o = Order(id="ord-19", order_number="ORD-0019",
+              customer_id="cust-kisaan", station_id="loc-fs-del",
+              destination="Kisaan Cold Store, Azadpur",
+              status="PENDING_OPS_APPROVAL", created_by=OP1, created_at=t0,
+              expected_delivery_at=t0 + timedelta(days=2))
+    db.add(o)
+    db.add(OrderItem(id="oi-ord-19-1", order_id="ord-19",
+                     product_id="prd-pcm-neg30", quantity=10))
+    _oe(db, o, "create", "—", "PENDING_OPS_APPROVAL", CK, t0)
+    o.status = "CANCELLED"
+    _oe(db, o, "cancel", "PENDING_OPS_APPROVAL", "CANCELLED", OP1,
+        t0 + timedelta(minutes=45), notes="SKU not available")
+    _al(db, "order", o.id, "ORDER_CANCELLED", OP1, t0 + timedelta(minutes=45))
+
+    # ─── ord-20: CANCELLED after approval ──────────────────────────
+    t0 = ago(days=6, minutes=300)
+    o = Order(id="ord-20", order_number="ORD-0020",
+              customer_id="cust-medplus", station_id="loc-fs-chn",
+              destination="MedPlus Warehouse, Chennai",
+              status="PENDING_OPS_APPROVAL", created_by=OP1, created_at=t0,
+              expected_delivery_at=t0 + timedelta(days=1))
+    db.add(o)
+    db.add(OrderItem(id="oi-ord-20-1", order_id="ord-20",
+                     product_id="prd-pcm-neg50", quantity=5))
+    _oe(db, o, "create", "—", "PENDING_OPS_APPROVAL", CM, t0)
+    step_approve(db, o, OP1, "loc-fs-chn", t0 + timedelta(minutes=30))
+    o.status = "CANCELLED"
+    _oe(db, o, "cancel", "APPROVED", "CANCELLED", OP1,
+        t0 + timedelta(minutes=240), notes="Customer postponed the shipment")
+    _al(db, "order", o.id, "ORDER_CANCELLED", OP1, t0 + timedelta(minutes=240))
+
 
 # ═══════════════════════════════════════════════════════════════════════
 #  Container statuses not covered by order flow
 # ═══════════════════════════════════════════════════════════════════════
 
 def seed_extra_container_states(db: Session):
-    """Add a QUARANTINED container to show that status."""
+    """Container states the order flow leaves empty: QUARANTINED, DAMAGED, UNDER_INSPECTION."""
     c = db.get(Container, "con-000036")
     if c and c.status == "AVAILABLE":
         _cm(db, c, "QUARANTINED", "MANUAL_QUARANTINE",
             "INSPECTION", "seed", "usr-fsblr", ago(days=4),
             location_id="loc-fs-chn")
+
+    # Damaged during handling, then sent back for inspection.
+    c = db.get(Container, "con-000018")
+    _cm(db, c, "DAMAGED", "MANUAL_DAMAGE", "INSPECTION", "seed",
+        "usr-fsblr", ago(days=2, minutes=240))
+    _cm(db, c, "UNDER_INSPECTION", "REINSPECTION", "INSPECTION", "seed",
+        "usr-fsblr", ago(days=1))
+
+    # Damaged and waiting for repair.
+    c = db.get(Container, "con-000019")
+    _cm(db, c, "DAMAGED", "MANUAL_DAMAGE", "INSPECTION", "seed",
+        "usr-fsblr", ago(days=3))
+
+    # Missing from the station floor.
+    c = db.get(Container, "con-000049")
+    _cm(db, c, "MISSING", "CYCLE_COUNT_MISSING", "INSPECTION", "seed",
+        "usr-fsdel", ago(days=2))
+    db.add(ExceptionRecord(
+        id="exc-demo-5", kind="MISSING_ON_DELIVERY", severity="CRITICAL",
+        status="OPEN", reference_type="CONTAINER", reference_id="con-000049",
+        details_json=json.dumps({"container_id": "con-000049"}),
+        created_at=ago(days=2),
+    ))
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -894,6 +1167,30 @@ def seed_exceptions(db: Session):
         reference_type="SCAN_SESSION", reference_id="scan-demo",
         details_json=json.dumps({"epc": "E280A1UNKNOWN000000000000"}),
         created_at=ago(minutes=45),
+    ))
+    db.add(ExceptionRecord(
+        id="exc-demo-2", kind="UNKNOWN_EPC", severity="WARNING", status="RESOLVED",
+        reference_type="SCAN_SESSION", reference_id="scan-demo-2",
+        details_json=json.dumps({"epc": "E280A1UNKNOWN000000000099"}),
+        created_at=ago(days=5), resolved_at=ago(days=4), resolved_by="usr-ops1",
+    ))
+    db.add(ExceptionRecord(
+        id="exc-demo-3", kind="DAMAGED_ON_DELIVERY", severity="WARNING",
+        status="RESOLVED", reference_type="ORDER", reference_id="ord-14",
+        details_json=json.dumps({"container_id": "con-000016"}),
+        created_at=ago(days=9), resolved_at=ago(days=8), resolved_by="usr-ops2",
+    ))
+    db.add(ExceptionRecord(
+        id="exc-demo-4", kind="MISSING_ON_DELIVERY", severity="CRITICAL",
+        status="RESOLVED", reference_type="ORDER", reference_id="ord-14",
+        details_json=json.dumps({"container_id": "con-000017"}),
+        created_at=ago(days=9), resolved_at=ago(days=7), resolved_by="usr-ops1",
+    ))
+    db.add(ExceptionRecord(
+        id="exc-demo-6", kind="UNKNOWN_EPC", severity="WARNING", status="OPEN",
+        reference_type="SCAN_SESSION", reference_id="scan-demo-3",
+        details_json=json.dumps({"epc": "E280A1UNKNOWN000000000123"}),
+        created_at=ago(days=1, minutes=30),
     ))
 
 
@@ -927,6 +1224,24 @@ def seed_notifications(db: Session):
                 "Your delivery ORD-0007 has arrived",
                 "Verify containers in your portal", "order", "ord-7",
                 ago(days=3, minutes=400))
+    # Ops alerts for disputes and a return, one already read.
+    _notif_role(db, "OPERATIONS_ADMIN", "DELIVERY_DISPUTED",
+                "Order ORD-0016 disputed", "Missing: 0, Damaged: 1",
+                "order", "ord-16", ago(days=4, minutes=-500))
+    _notif_role(db, "OPERATIONS_ADMIN", "DELIVERY_DISPUTED",
+                "Order ORD-0010 disputed", "Missing: 1, Damaged: 0",
+                "order", "ord-10", ago(days=5, minutes=-500))
+    db.flush()
+    read = db.query(Notification).filter_by(reference_id="ord-10",
+                                            kind="DELIVERY_DISPUTED").first()
+    read.read_at = ago(days=4)
+    _notif_user(db, "usr-zepto", "DELIVERY_ARRIVED",
+                "Your delivery ORD-0016 has arrived",
+                "Verify containers in your portal", "order", "ord-16",
+                ago(days=4, minutes=-400))
+    _notif_user(db, "usr-driver4", "DRIVER_ASSIGNED",
+                "You have a delivery: ORD-0017", "Pick up from FS-DEL",
+                "order", "ord-17", ago(days=11, minutes=-180))
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -952,8 +1267,8 @@ def seed() -> None:
         seed_exceptions(db)
         seed_notifications(db)
         db.commit()
-        print("Seed complete: 21 users, 60 containers, 15 orders "
-              "(every lifecycle state populated).")
+        print("Seed complete: 27 users, 62 containers, 20 orders "
+              "(every order and container state populated).")
     finally:
         db.close()
 

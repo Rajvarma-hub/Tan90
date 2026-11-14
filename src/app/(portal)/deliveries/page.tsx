@@ -7,11 +7,7 @@ import { getDriverBoard } from "@/features/deliveries/queries";
 export const metadata: Metadata = { title: "Deliveries" };
 
 async function Board() {
-  return (
-    <div className="p-4">
-      <DriverBoard {...await getDriverBoard()} />
-    </div>
-  );
+  return <DriverBoard {...(await getDriverBoard())} />;
 }
 
 export default function DeliveriesPage() {

@@ -1,4 +1,5 @@
 import type { ComponentProps, ReactNode } from "react";
+import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const control =
@@ -8,8 +9,22 @@ export function Input({ className, ...props }: ComponentProps<"input">) {
   return <input className={cn(control, className)} {...props} />;
 }
 
-export function Select({ className, ...props }: ComponentProps<"select">) {
-  return <select className={cn(control, "pr-8", className)} {...props} />;
+// className sizes the wrapper so width utilities (w-48, flex-1) apply to the whole control.
+export function Select({ className, children, ...props }: ComponentProps<"select">) {
+  return (
+    <div className={cn("relative min-w-0", className)}>
+      <select
+        className={cn(control, "w-full cursor-pointer appearance-none pr-9 [&>option]:bg-card")}
+        {...props}
+      >
+        {children}
+      </select>
+      <ChevronDown
+        aria-hidden
+        className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 text-muted-foreground"
+      />
+    </div>
+  );
 }
 
 export function Field({

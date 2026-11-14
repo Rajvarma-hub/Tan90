@@ -8,7 +8,7 @@ export function OrderProgress({ status }: { status: OrderStatus }) {
   const reached = milestoneIndex(status);
 
   return (
-    <ol className="flex overflow-x-auto rounded-xl border bg-card px-4 py-4">
+    <ol className="flex overflow-x-auto rounded-xl border bg-card px-5 py-5 sm:px-6">
       {orderMilestones.map((label, index) => {
         const done = index <= reached;
         return (

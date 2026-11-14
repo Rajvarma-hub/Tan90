@@ -8,11 +8,7 @@ export const metadata: Metadata = { title: "Orders" };
 
 async function Orders() {
   const { orders, options } = await getOrdersPage();
-  return (
-    <div className="p-4">
-      <OrdersTable orders={orders} options={options} />
-    </div>
-  );
+  return <OrdersTable orders={orders} options={options} />;
 }
 
 export default function OrdersPage() {

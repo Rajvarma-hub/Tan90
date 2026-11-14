@@ -4,14 +4,10 @@ import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { ContainerList } from "@/features/containers/components/container-list";
 import { getContainersPage } from "@/features/containers/queries";
 
-export const metadata: Metadata = { title: "Asset Management" };
+export const metadata: Metadata = { title: "Containers" };
 
 async function Containers() {
-  return (
-    <div className="p-4">
-      <ContainerList {...await getContainersPage()} />
-    </div>
-  );
+  return <ContainerList {...await getContainersPage()} />;
 }
 
 export default function AssetsPage() {

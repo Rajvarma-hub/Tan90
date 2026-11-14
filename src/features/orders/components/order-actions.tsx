@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Dialog } from "@/components/ui/dialog";
 import { Field, FormError, Input, Select } from "@/components/ui/form";
 import { ScanChecklist } from "@/features/containers/components/scan-checklist";
@@ -206,7 +207,7 @@ export function OrderActions({
   );
 
   return (
-    <div className="rounded-xl border bg-card p-5">
+    <Card>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
@@ -484,6 +485,6 @@ export function OrderActions({
           {dialogFooter("Submit Inspection")}
         </form>
       </Dialog>
-    </div>
+    </Card>
   );
 }

@@ -43,7 +43,7 @@ export function ScanInput({
           setValue("");
           onScan(code);
         }}
-        className="h-10 w-full rounded-md border border-primary/50 bg-background/40 pr-3 pl-9 font-mono text-sm text-card-foreground outline-none placeholder:font-sans placeholder:text-muted-foreground/70 focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
+        className="h-9 w-full rounded-md border border-primary/50 bg-background/40 pr-3 pl-9 font-mono text-sm text-card-foreground outline-none placeholder:font-sans placeholder:text-muted-foreground/70 focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
       />
     </div>
   );

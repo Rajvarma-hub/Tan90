@@ -2,23 +2,26 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import {
-  AlertCircle,
-  CheckCircle2,
-  ChevronLeft,
-  ChevronRight,
-  Clock,
-  Package,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { AlertCircle } from "lucide-react";
 import { Card, CardHeader, EmptyState } from "@/components/ui/card";
 import { Input, Select } from "@/components/ui/form";
+import { Page, PageHeader, Stat, StatGrid, Toolbar } from "@/components/ui/page";
+import { PAGE_SIZE, Pagination } from "@/components/ui/pagination";
 import { Table, Td, Th } from "@/components/ui/table";
 import { NewOrderDialog } from "@/features/orders/components/new-order-dialog";
 import { OrderStatusBadge } from "@/features/orders/components/order-status-badge";
 import { orderStatusMeta, orderStatuses } from "@/features/orders/status";
 import type { OrderFormOptions, OrderSummary } from "@/features/orders/types";
 import { formatDate, formatNumber, formatTime } from "@/lib/format";
+
+const IN_PROGRESS = new Set([
+  "APPROVED",
+  "PACKING",
+  "PACKED",
+  "DISPATCHED",
+  "IN_TRANSIT",
+  "ARRIVED",
+]);
 
 const DELIVERED = new Set([
   "DELIVERED",
@@ -28,26 +31,6 @@ const DELIVERED = new Set([
   "RETURN_RECEIVED",
   "CLOSED",
 ]);
-
-function Stat({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: typeof Package;
-  label: string;
-  value: number;
-}) {
-  return (
-    <div className="flex h-9 items-center gap-2 rounded-md border px-3 text-sm">
-      <Icon className="size-4 text-muted-foreground" />
-      <span className="text-muted-foreground">{label}</span>
-      <span className="font-semibold text-card-foreground">
-        {formatNumber(value)}
-      </span>
-    </div>
-  );
-}
 
 export function OrdersTable({
   orders,
@@ -59,7 +42,6 @@ export function OrdersTable({
   const [search, setSearch] = useState("");
   const [customerId, setCustomerId] = useState("");
   const [status, setStatus] = useState("");
-  const [pageSize, setPageSize] = useState(10);
   const [page, setPage] = useState(1);
 
   const filtered = useMemo(() => {
@@ -76,36 +58,44 @@ export function OrdersTable({
     );
   }, [orders, search, customerId, status]);
 
-  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);
-  const rows = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const rows = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   return (
-    <Card>
-      <CardHeader
+    <Page>
+      <PageHeader
         title="Orders"
-        description="Manage and view all orders in the system"
-        actions={
-          <>
-            <Stat icon={Package} label="Total" value={orders.length} />
-            <Stat
-              icon={Clock}
-              label="Pending approval"
-              value={orders.filter((o) => o.status === "PENDING_OPS_APPROVAL").length}
-            />
-            <Stat
-              icon={CheckCircle2}
-              label="Delivered"
-              value={orders.filter((o) => DELIVERED.has(o.status)).length}
-            />
-            <NewOrderDialog options={options} />
-          </>
-        }
+        description="Track every order from placement to return."
+        actions={<NewOrderDialog options={options} />}
       />
 
-      <div className="mb-4 grid gap-3 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)]">
+      <StatGrid>
+        <Stat label="Total orders" value={formatNumber(orders.length)} />
+        <Stat
+          label="Pending approval"
+          value={formatNumber(orders.filter((o) => o.status === "PENDING_OPS_APPROVAL").length)}
+        />
+        <Stat
+          label="In progress"
+          value={formatNumber(orders.filter((o) => IN_PROGRESS.has(o.status)).length)}
+        />
+        <Stat
+          label="Delivered"
+          value={formatNumber(orders.filter((o) => DELIVERED.has(o.status)).length)}
+        />
+      </StatGrid>
+
+      <Card>
+      <CardHeader
+        title="All orders"
+        description={`${filtered.length} of ${orders.length} shown`}
+      />
+
+      <Toolbar>
         <Input
           type="search"
+          className="min-w-56 flex-1"
           placeholder="Search by order, customer, destination…"
           value={search}
           onChange={(event) => {
@@ -114,6 +104,7 @@ export function OrdersTable({
           }}
         />
         <Select
+          className="w-48"
           aria-label="Customer"
           value={customerId}
           onChange={(event) => {
@@ -121,7 +112,7 @@ export function OrdersTable({
             setPage(1);
           }}
         >
-          <option value="">All Customers</option>
+          <option value="">All customers</option>
           {options.customers.map((customer) => (
             <option key={customer.id} value={customer.id}>
               {customer.label}
@@ -129,6 +120,7 @@ export function OrdersTable({
           ))}
         </Select>
         <Select
+          className="w-48"
           aria-label="Status"
           value={status}
           onChange={(event) => {
@@ -136,14 +128,14 @@ export function OrdersTable({
             setPage(1);
           }}
         >
-          <option value="">All Statuses</option>
+          <option value="">All statuses</option>
           {orderStatuses.map((value) => (
             <option key={value} value={value}>
               {orderStatusMeta[value].label}
             </option>
           ))}
         </Select>
-      </div>
+      </Toolbar>
 
       {rows.length === 0 ? (
         <EmptyState>No orders match these filters.</EmptyState>
@@ -151,12 +143,12 @@ export function OrdersTable({
         <Table>
           <thead>
             <tr>
-              <Th>Order ID</Th>
+              <Th>Order</Th>
               <Th>Customer</Th>
-              <Th>Freezing Station</Th>
-              <Th>Status</Th>
-              <Th className="text-center">Assets</Th>
-              <Th>Delivery Date</Th>
+              <Th className="text-center">Station</Th>
+              <Th className="text-center">Status</Th>
+              <Th className="text-center">Items</Th>
+              <Th className="text-center">Delivery</Th>
             </tr>
           </thead>
           <tbody>
@@ -176,14 +168,14 @@ export function OrdersTable({
                     {order.destination ?? "No destination"}
                   </div>
                 </Td>
-                <Td>
+                <Td className="text-center">
                   {order.stationCode ?? (
                     <span className="inline-flex items-center gap-1.5 text-red-400">
-                      <AlertCircle className="size-4" /> Not Assigned
+                      <AlertCircle className="size-4" /> Not assigned
                     </span>
                   )}
                 </Td>
-                <Td>
+                <Td className="text-center">
                   <OrderStatusBadge status={order.status} />
                 </Td>
                 <Td className="text-center tabular-nums">
@@ -192,7 +184,7 @@ export function OrdersTable({
                     {order.itemCount} {order.itemCount === 1 ? "item" : "items"}
                   </div>
                 </Td>
-                <Td>
+                <Td className="text-center">
                   <div className="font-medium">
                     {formatDate(order.expectedDeliveryAt)}
                   </div>
@@ -208,48 +200,14 @@ export function OrdersTable({
         </Table>
       )}
 
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm">
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Previous page"
-            disabled={currentPage === 1}
-            onClick={() => setPage(currentPage - 1)}
-          >
-            <ChevronLeft />
-          </Button>
-          <span className="text-muted-foreground">
-            Page {currentPage} of {pageCount} · {filtered.length} orders
-          </span>
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Next page"
-            disabled={currentPage === pageCount}
-            onClick={() => setPage(currentPage + 1)}
-          >
-            <ChevronRight />
-          </Button>
-        </div>
-        <label className="flex items-center gap-2 whitespace-nowrap text-muted-foreground">
-          Items per page
-          <Select
-            className="w-20"
-            value={pageSize}
-            onChange={(event) => {
-              setPageSize(Number(event.target.value));
-              setPage(1);
-            }}
-          >
-            {[10, 20, 50].map((size) => (
-              <option key={size} value={size}>
-                {size}
-              </option>
-            ))}
-          </Select>
-        </label>
-      </div>
-    </Card>
+      <Pagination
+        page={currentPage}
+        pageCount={pageCount}
+        total={filtered.length}
+        noun={filtered.length === 1 ? "order" : "orders"}
+        onPage={setPage}
+      />
+      </Card>
+    </Page>
   );
 }

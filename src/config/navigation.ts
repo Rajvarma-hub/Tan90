@@ -18,16 +18,16 @@ export type NavItem = {
 export const mainNav: NavItem[] = [
   { title: "Orders", href: "/orders", icon: Package },
   {
-    title: "Inventory Management",
+    title: "Inventory",
     href: "/inventory",
     icon: Warehouse,
     children: [
-      { title: "Asset Inventory", href: "/inventory/assets" },
-      { title: "Movements", href: "/inventory/movements" },
-      { title: "Freezing Stations", href: "/inventory/stations" },
+      { title: "Products", href: "/inventory/assets" },
+      { title: "Stock Movements", href: "/inventory/movements" },
+      { title: "Locations", href: "/inventory/stations" },
     ],
   },
-  { title: "Asset Management", href: "/assets", icon: Boxes },
+  { title: "Containers", href: "/assets", icon: Boxes },
   { title: "Deliveries", href: "/deliveries", icon: Truck },
   { title: "Exceptions", href: "/exceptions", icon: TriangleAlert },
 ];
