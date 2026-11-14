@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Comprehensive endpoint test — every endpoint, every role, every limit."""
+import os
 import sys
 import time
 import requests
 
-BASE = "http://127.0.0.1:8000"
+BASE = os.environ.get("API_URL", "http://127.0.0.1:8001")
 PASSWORD = "password123"
 
 GREEN, RED, YELLOW, CYAN, RESET = "\033[92m", "\033[91m", "\033[93m", "\033[96m", "\033[0m"
@@ -225,11 +226,11 @@ call("POST", "/api/containers", token=packer, body={
     "location_id": "loc-fs-blr",
 }, expect=409, name="#16 dup EPC → 409")
 call("POST", "/api/containers", token=packer, body={
-    "epc": "Z", "container_type_code": "BAD",
+    "epc": "ZZZZ9999", "container_type_code": "BAD",
     "location_id": "loc-fs-blr",
 }, expect=400, name="#16 bad type → 400")
 call("POST", "/api/containers", token=packer, body={
-    "epc": "W", "container_type_code": "SHIP-20",
+    "epc": "WWWW9999", "container_type_code": "SHIP-20",
     "location_id": "loc-fs-chn",
 }, expect=403, name="#16 wrong station → 403")
 
