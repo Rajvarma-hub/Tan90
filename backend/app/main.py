@@ -1,7 +1,10 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import __version__
+from app.core.config import settings
 from app.db.base import init_schema
 from app.routers import (
     admin, auth, containers, deliveries, dispatches,
@@ -9,23 +12,26 @@ from app.routers import (
     returns, stations, inventory, directory,
 )
 
-app = FastAPI(title="Tan90 Logistics API", version=__version__)
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    init_schema()
+    # Demo data is for development only; it never runs in production.
+    if not settings.is_production:
+        try:
+            from app.db.seed import seed
+            seed()  # idempotent: no-op if data exists
+        except Exception as e:
+            print(f"[startup] seed skipped: {e}")
+    yield
 
+
+app = FastAPI(title="Tan90 Logistics API", version=__version__, lifespan=lifespan)
+
+# Auth is a bearer token in a header, not a cookie, so credentials are not needed.
 app.add_middleware(
-    CORSMiddleware, allow_origins=["*"], allow_credentials=True,
+    CORSMiddleware, allow_origins=settings.cors_origin_list,
     allow_methods=["*"], allow_headers=["*"],
 )
-
-
-@app.on_event("startup")
-def on_startup() -> None:
-    init_schema()
-    # Auto-seed on first boot — idempotent, no-op if data exists
-    try:
-        from app.db.seed import seed
-        seed()
-    except Exception as e:
-        print(f"[startup] seed skipped: {e}")
 
 
 @app.get("/health")

@@ -21,7 +21,7 @@ from app.db.session import SessionLocal
 from app.models.audit import AuditLog, ContainerMovement, ExceptionRecord
 from app.models.container import Container
 from app.models.customer import Customer
-from app.models.delivery import DeliveryScan, DeliveryTask, GPSEvent
+from app.models.delivery import DeliveryTask, GPSEvent
 from app.models.dispatch import Dispatch, DispatchItem
 from app.models.inventory import InventoryBalance, InventoryMovement
 from app.models.location import Location

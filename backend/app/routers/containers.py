@@ -41,9 +41,6 @@ def _next_container_code(db: Session) -> str:
 
 
 def _container_dict(db: Session, c: Container) -> dict:
-    tag = db.query(RFIDTag).filter(
-        RFIDTag.container_id == c.id, RFIDTag.active == True  # noqa: E712
-    ).first()
     return container_view.describe(db, [c])[0]
 
 

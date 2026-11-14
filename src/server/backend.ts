@@ -32,15 +32,26 @@ async function request(path: string, init: RequestInit): Promise<Response> {
   }
 }
 
+// Local dev works with no setup by using the seeded Ops account. Production must
+// provide its own credentials, so a deployment never ships a known password.
+function getCredentials(): { email: string; password: string } {
+  const { BACKEND_EMAIL: email, BACKEND_PASSWORD: password, NODE_ENV } = env;
+  if (email && password) return { email, password };
+  if (NODE_ENV === "production") {
+    throw new AppError(
+      "INTERNAL_ERROR",
+      "BACKEND_EMAIL and BACKEND_PASSWORD must be set in production.",
+    );
+  }
+  return { email: "ops@tan90.local", password: "password123" };
+}
+
 async function getToken(): Promise<string> {
   if (cachedToken) return cachedToken;
   const response = await request("/api/auth/login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      email: env.BACKEND_EMAIL,
-      password: env.BACKEND_PASSWORD,
-    }),
+    body: JSON.stringify(getCredentials()),
   });
   if (!response.ok) {
     throw new AppError(

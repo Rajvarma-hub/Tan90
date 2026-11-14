@@ -9,9 +9,8 @@ from app.core.order_states import check_container_transition, InvalidContainerTr
 from app.db.session import get_db
 from app.models.audit import ContainerMovement, ExceptionRecord
 from app.models.container import Container
-from app.models.order import Order
 from app.models.packing import PackingItem, PackingSession
-from app.models.rfid import RFIDScanEvent, RFIDScanSession, RFIDTag
+from app.models.rfid import RFIDScanEvent, RFIDScanSession
 from app.models.user import User
 from app.schemas.packing import PackingItemContentsIn, PackingScanIn, PackingScanResult
 from app.services import order_flow

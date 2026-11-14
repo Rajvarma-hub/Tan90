@@ -6,7 +6,6 @@ from sqlalchemy.orm import Session
 from app.core.deps import get_current_user, require_roles
 from app.db.session import get_db
 from app.models.delivery import DeliveryScan, DeliveryTask, GPSEvent
-from app.models.order import Order
 from app.models.rfid import RFIDTag
 from app.models.user import User
 from app.schemas.delivery import DeliveryScanIn, GPSIn

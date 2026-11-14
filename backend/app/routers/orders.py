@@ -6,8 +6,7 @@ from sqlalchemy.orm import Session
 from app.core.deps import get_current_user, require_roles
 from app.db.session import get_db
 from app.models.container import Container
-from app.models.delivery import DeliveryTask
-from app.models.dispatch import Dispatch, DispatchItem
+from app.models.dispatch import Dispatch
 from app.models.order import Order
 from app.models.order_event import OrderEvent
 from app.models.packing import PackingItem, PackingSession
