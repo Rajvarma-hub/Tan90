@@ -7,7 +7,7 @@ import { Card, CardHeader, EmptyState } from "@/components/ui/card";
 import { Input, Select } from "@/components/ui/form";
 import { Page, PageHeader, Stat, StatGrid, Toolbar } from "@/components/ui/page";
 import { PAGE_SIZE, Pagination } from "@/components/ui/pagination";
-import { Table, Td, Th } from "@/components/ui/table";
+import { Cell, Table, Td, Th } from "@/components/ui/table";
 import { NewOrderDialog } from "@/features/orders/components/new-order-dialog";
 import { OrderStatusBadge } from "@/features/orders/components/order-status-badge";
 import { orderStatusMeta, orderStatuses } from "@/features/orders/status";
@@ -144,29 +144,34 @@ export function OrdersTable({
           <thead>
             <tr>
               <Th>Order</Th>
-              <Th>Customer</Th>
+              <Th>Customer and destination</Th>
               <Th className="text-center">Station</Th>
               <Th className="text-center">Status</Th>
-              <Th className="text-center">Items</Th>
-              <Th className="text-center">Delivery</Th>
+              <Th className="text-center">Quantity</Th>
+              <Th className="text-center">Expected delivery</Th>
             </tr>
           </thead>
           <tbody>
             {rows.map((order) => (
               <tr key={order.id} className="transition-colors hover:bg-accent/50">
                 <Td>
-                  <Link
-                    href={`/orders/${order.id}`}
-                    className="font-medium hover:text-primary hover:underline"
+                  <Cell
+                    main={
+                      <Link
+                        href={`/orders/${order.id}`}
+                        className="hover:text-primary hover:underline"
+                      >
+                        {order.orderNumber}
+                      </Link>
+                    }
                   >
-                    {order.orderNumber}
-                  </Link>
+                    <span>Placed {formatDate(order.createdAt)}</span>
+                  </Cell>
                 </Td>
                 <Td>
-                  <div className="font-medium">{order.customerName}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {order.destination ?? "No destination"}
-                  </div>
+                  <Cell main={order.customerName}>
+                    <span>{order.destination ?? "No destination"}</span>
+                  </Cell>
                 </Td>
                 <Td className="text-center">
                   {order.stationCode ?? (
@@ -178,21 +183,17 @@ export function OrdersTable({
                 <Td className="text-center">
                   <OrderStatusBadge status={order.status} />
                 </Td>
-                <Td className="text-center tabular-nums">
-                  <div>{formatNumber(order.totalQuantity)}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {order.itemCount} {order.itemCount === 1 ? "item" : "items"}
-                  </div>
+                <Td className="text-center">
+                  <Cell main={formatNumber(order.totalQuantity)} className="justify-items-center">
+                    <span>
+                      {order.itemCount} {order.itemCount === 1 ? "product" : "products"}
+                    </span>
+                  </Cell>
                 </Td>
                 <Td className="text-center">
-                  <div className="font-medium">
-                    {formatDate(order.expectedDeliveryAt)}
-                  </div>
-                  {order.expectedDeliveryAt && (
-                    <div className="text-xs text-muted-foreground">
-                      {formatTime(order.expectedDeliveryAt)}
-                    </div>
-                  )}
+                  <Cell main={formatDate(order.expectedDeliveryAt)} className="justify-items-center">
+                    {order.expectedDeliveryAt && <span>{formatTime(order.expectedDeliveryAt)}</span>}
+                  </Cell>
                 </Td>
               </tr>
             ))}

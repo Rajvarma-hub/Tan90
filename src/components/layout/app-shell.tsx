@@ -3,6 +3,7 @@
 import { Suspense, useState, type ReactNode } from "react";
 import { AppHeader } from "@/components/layout/app-header";
 import { AppSidebar } from "@/components/layout/app-sidebar";
+import { BreadcrumbProvider } from "@/components/layout/breadcrumb-label";
 import { cn } from "@/lib/utils";
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -18,7 +19,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <>
+    <BreadcrumbProvider>
       {/* Sidebar and header read the pathname, which is only known at request time on dynamic routes. */}
       <Suspense fallback={null}>
         <AppSidebar
@@ -45,6 +46,6 @@ export function AppShell({ children }: { children: ReactNode }) {
         </Suspense>
         <main className="flex flex-1 flex-col">{children}</main>
       </div>
-    </>
+    </BreadcrumbProvider>
   );
 }

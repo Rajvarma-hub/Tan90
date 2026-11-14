@@ -3,8 +3,9 @@
 import { useTransition } from "react";
 import Link from "next/link";
 import type { Route } from "next";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChevronRight, PanelLeft, RefreshCw } from "lucide-react";
+import { useBreadcrumbLabel } from "@/components/layout/breadcrumb-label";
 import { Button } from "@/components/ui/button";
 import { breadcrumbsFor } from "@/config/navigation";
 import { siteConfig } from "@/config/site";
@@ -18,7 +19,13 @@ export function AppHeader({
   const pathname = usePathname();
   const router = useRouter();
   const [refreshing, startRefresh] = useTransition();
-  const crumbs = breadcrumbsFor(pathname);
+  const detailLabel = useBreadcrumbLabel();
+  const baseCrumbs = breadcrumbsFor(pathname, useSearchParams().get("view"));
+  // A detail page under a sub-section (a station) has no path segment of its own.
+  const crumbs =
+    detailLabel && !baseCrumbs.at(-1)?.dynamic
+      ? [...baseCrumbs, { title: detailLabel, href: `${pathname}#${detailLabel}`, dynamic: false }]
+      : baseCrumbs;
 
   return (
     <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-2 border-b bg-background px-4 print:hidden">
@@ -45,7 +52,7 @@ export function AppHeader({
                 <ChevronRight aria-hidden className="size-3.5" />
                 {last ? (
                   <span aria-current="page" className="text-foreground">
-                    {crumb.title}
+                    {crumb.dynamic ? (detailLabel ?? crumb.title.toUpperCase()) : crumb.title}
                   </span>
                 ) : (
                   <Link

@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Dialog } from "@/components/ui/dialog";
+import { Dialog, DialogActions } from "@/components/ui/dialog";
 import { Field, FormError, Input } from "@/components/ui/form";
-import { ScanInput } from "@/components/ui/scan-input";
+import { TagInput } from "@/components/ui/scan-input";
 import { replaceTag } from "@/features/containers/actions";
 import { useServerAction } from "@/hooks/use-server-action";
 
@@ -43,16 +43,7 @@ export function ReplaceTagDialog({ containerId }: { containerId: string }) {
           }}
         >
           <Field label="New tag ID">
-            {newEpc ? (
-              <div className="flex items-center gap-2">
-                <Input readOnly className="flex-1 font-mono" value={newEpc} />
-                <Button variant="outline" onClick={() => setNewEpc("")}>
-                  Rescan
-                </Button>
-              </div>
-            ) : (
-              <ScanInput onScan={setNewEpc} autoFocus />
-            )}
+            <TagInput value={newEpc} onChange={setNewEpc} autoFocus />
           </Field>
           <Field label="Reason">
             <Input
@@ -63,14 +54,11 @@ export function ReplaceTagDialog({ containerId }: { containerId: string }) {
             />
           </Field>
           <FormError message={error} />
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setOpen(false)}>
-              Cancel
-            </Button>
+          <DialogActions onCancel={() => setOpen(false)}>
             <Button type="submit" disabled={pending || !newEpc}>
               {pending ? "Saving…" : "Replace Tag"}
             </Button>
-          </div>
+          </DialogActions>
         </form>
       </Dialog>
     </>

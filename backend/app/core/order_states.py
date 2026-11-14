@@ -57,7 +57,7 @@ ORDER_TRANSITIONS = {
 
 # container statuses (unchanged from earlier work)
 CONTAINER_TRANSITIONS = {
-    "AVAILABLE":              {"PACKING", "DAMAGED", "QUARANTINED", "MISSING"},
+    "AVAILABLE":              {"PACKING", "DAMAGED", "QUARANTINED", "MISSING", "RETIRED"},
     "PACKING":                {"PACKED", "AVAILABLE"},
     "PACKED":                 {"IN_TRANSIT_TO_CUSTOMER", "AVAILABLE"},
     "IN_TRANSIT_TO_CUSTOMER": {"WITH_CUSTOMER"},
@@ -65,9 +65,11 @@ CONTAINER_TRANSITIONS = {
     "RETURN_REQUESTED":       {"IN_TRANSIT_TO_STATION"},
     "IN_TRANSIT_TO_STATION":  {"UNDER_INSPECTION"},
     "UNDER_INSPECTION":       {"AVAILABLE", "DAMAGED", "QUARANTINED"},
-    "DAMAGED":                {"UNDER_INSPECTION", "AVAILABLE"},
-    "QUARANTINED":            {"UNDER_INSPECTION", "AVAILABLE"},
-    "MISSING":                {"UNDER_INSPECTION", "AVAILABLE"},
+    "DAMAGED":                {"UNDER_INSPECTION", "AVAILABLE", "RETIRED"},
+    "QUARANTINED":            {"UNDER_INSPECTION", "AVAILABLE", "RETIRED"},
+    "MISSING":                {"UNDER_INSPECTION", "AVAILABLE", "RETIRED"},
+    # Unregistered: out of circulation until it is restored with a new tag.
+    "RETIRED":                {"AVAILABLE"},
 }
 
 

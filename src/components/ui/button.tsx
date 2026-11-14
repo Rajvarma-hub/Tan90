@@ -1,9 +1,16 @@
 import type { ComponentProps } from "react";
 import { cn } from "@/lib/utils";
 
+// Button rules used across the portal:
+// md (h-9): header actions, form submits, dialog footers, toolbar buttons, full-width card footers.
+// sm (h-8): actions inside table rows and card headers.
+// primary = the one main action; outline = secondary and Cancel; danger = destructive row action;
+// destructive = confirming a destructive action in a dialog; ghost = quiet actions such as Clear filters.
 const variants = {
   primary: "bg-primary text-primary-foreground hover:bg-primary/90",
   outline: "border bg-background/40 text-card-foreground hover:bg-accent",
+  danger:
+    "border border-destructive/50 bg-destructive/10 text-red-400 hover:bg-destructive/20 hover:text-red-300",
   destructive: "bg-destructive text-white hover:bg-destructive/90",
   ghost: "text-foreground hover:bg-accent hover:text-accent-foreground",
 } as const;

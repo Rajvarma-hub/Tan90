@@ -2,7 +2,28 @@
 
 import { useEffect, type ReactNode } from "react";
 import { X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+
+// Every dialog ends the same way: Cancel on the left, the main action(s) on the right.
+export function DialogActions({
+  onCancel,
+  cancelLabel = "Cancel",
+  children,
+}: {
+  onCancel: () => void;
+  cancelLabel?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex justify-end gap-2">
+      <Button variant="outline" onClick={onCancel}>
+        {cancelLabel}
+      </Button>
+      {children}
+    </div>
+  );
+}
 
 export function Dialog({
   open,

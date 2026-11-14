@@ -5,7 +5,7 @@ import { MapPin, Plus, Snowflake, Warehouse } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, EmptyState, ItemCard, ItemGrid } from "@/components/ui/card";
-import { Dialog } from "@/components/ui/dialog";
+import { Dialog, DialogActions } from "@/components/ui/dialog";
 import { Field, FormError, Input, Select } from "@/components/ui/form";
 import { Page, PageHeader, Stat, StatGrid, Toolbar } from "@/components/ui/page";
 import { createStation } from "@/features/inventory/actions";
@@ -86,9 +86,11 @@ function AddStationDialog() {
             />
           </Field>
           <FormError message={error} />
-          <Button type="submit" disabled={pending} className="justify-self-start">
-            {pending ? "Adding…" : "Add Location"}
-          </Button>
+          <DialogActions onCancel={() => setOpen(false)}>
+            <Button type="submit" disabled={pending}>
+              {pending ? "Adding…" : "Add Location"}
+            </Button>
+          </DialogActions>
         </form>
       </Dialog>
     </>
@@ -170,7 +172,7 @@ export function Stations({ stations }: { stations: StationSummary[] }) {
                 title={station.code}
                 subtitle={station.name}
                 badge={
-                  <Badge tone={station.is_active ? "blue" : "gray"}>
+                  <Badge tone={station.is_active ? "green" : "gray"}>
                     {station.is_active ? "Online" : "Offline"}
                   </Badge>
                 }

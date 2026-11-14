@@ -66,8 +66,14 @@ def _move_container(db: Session, c: Container, to_status: str, reason: str,
     c.status = to_status
     if customer_id is not None:
         c.current_customer_id = customer_id
+    elif to_status in BACK_AT_STATION:
+        c.current_customer_id = None
     if location_id is not None:
         c.current_location_id = location_id
+
+
+# Once a container is received back, the customer no longer holds it.
+BACK_AT_STATION = {"UNDER_INSPECTION", "AVAILABLE", "DAMAGED", "QUARANTINED"}
 
 
 # ─── helpers ────────────────────────────────────────────────────

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Dialog } from "@/components/ui/dialog";
+import { Dialog, DialogActions } from "@/components/ui/dialog";
 import { Field, FormError, Input, Select } from "@/components/ui/form";
 import { createOrder } from "@/features/orders/actions";
 import type { OrderFormOptions } from "@/features/orders/types";
@@ -182,14 +182,11 @@ export function NewOrderDialog({ options }: { options: OrderFormOptions }) {
           </div>
 
           <FormError message={error} />
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setOpen(false)}>
-              Cancel
-            </Button>
+          <DialogActions onCancel={() => setOpen(false)}>
             <Button type="submit" disabled={pending}>
               {pending ? "Creating…" : "Create Order"}
             </Button>
-          </div>
+          </DialogActions>
         </form>
       </Dialog>
     </>

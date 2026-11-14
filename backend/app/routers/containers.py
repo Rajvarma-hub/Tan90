@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.core.container_types import CONTAINER_TYPES, resolve as resolve_type
 from app.core.deps import get_current_user, require_roles
+from app.core.order_states import InvalidContainerTransition, check_container_transition
 from app.db.session import get_db
 from app.models.audit import AuditLog, ContainerMovement
 from app.models.container import Container
@@ -18,7 +19,8 @@ from app.models.packing import PackingSession
 from app.services import container_view
 from app.services.scan import resolve_scan
 from app.schemas.container import (
-    ContainerOut, ContainerRegisterRequest, ReplaceTagRequest,
+    ContainerOut, ContainerRegisterRequest, ContainerUpdateRequest,
+    ReplaceTagRequest, RestoreRequest, UnregisterRequest,
 )
 
 router = APIRouter(prefix="/api/containers", tags=["containers"])
@@ -42,6 +44,16 @@ def _next_container_code(db: Session) -> str:
 
 def _container_dict(db: Session, c: Container) -> dict:
     return container_view.describe(db, [c])[0]
+
+
+# Statuses in which a container is free of any order, so its record can be edited.
+EDITABLE_STATUSES = {"AVAILABLE", "DAMAGED", "QUARANTINED", "MISSING"}
+ASSET_ADMIN_ROLES = ("SUPER_ADMIN", "OPERATIONS_ADMIN", "FREEZING_STATION_MANAGER")
+
+
+def _require_own_station(user: User, c: Container) -> None:
+    if user.role == "FREEZING_STATION_MANAGER" and user.location_id != c.current_location_id:
+        raise HTTPException(403, "You can only manage containers at your own station")
 
 
 # ─── Reference data ────────────────────────────────────────────────
@@ -137,6 +149,9 @@ def replace_tag(
     c = db.get(Container, container_id)
     if not c:
         raise HTTPException(404, "Container not found")
+    if c.status == "RETIRED":
+        raise HTTPException(409, "Container is unregistered. Restore it with a new tag first")
+    _require_own_station(user, c)
 
     clash = db.query(RFIDTag).filter(
         RFIDTag.epc == payload.new_epc, RFIDTag.active == True  # noqa: E712
@@ -165,6 +180,136 @@ def replace_tag(
     return _container_dict(db, c)
 
 
+@router.patch("/{container_id}", response_model=ContainerOut)
+def update_container(
+    container_id: str,
+    payload: ContainerUpdateRequest,
+    user: User = Depends(require_roles(*ASSET_ADMIN_ROLES)),
+    db: Session = Depends(get_db),
+):
+    """Correct the container type or move it to another location while it is off any order."""
+    c = db.get(Container, container_id)
+    if not c:
+        raise HTTPException(404, "Container not found")
+    _require_own_station(user, c)
+    if c.status not in EDITABLE_STATUSES:
+        raise HTTPException(409, "Container is on an order or retired. Edit it once it is back in stock")
+
+    changes: dict[str, dict] = {}
+    if payload.container_type_code is not None:
+        try:
+            type_name, capacity = resolve_type(payload.container_type_code)
+        except KeyError:
+            raise HTTPException(400, f"Unknown container type '{payload.container_type_code}'")
+        if type_name != c.container_type:
+            changes["container_type"] = {"from": c.container_type, "to": type_name}
+            c.container_type = type_name
+            c.capacity_litres = capacity
+
+    if payload.location_id is not None and payload.location_id != c.current_location_id:
+        if not db.get(Location, payload.location_id):
+            raise HTTPException(404, "Location not found")
+        db.add(ContainerMovement(
+            container_id=c.id, from_status=c.status, to_status=c.status,
+            from_location_id=c.current_location_id, to_location_id=payload.location_id,
+            reason="RELOCATED", reference_type="CONTAINER", reference_id=c.id,
+            actor_id=user.id,
+        ))
+        changes["location_id"] = {"from": c.current_location_id, "to": payload.location_id}
+        c.current_location_id = payload.location_id
+
+    if changes:
+        db.add(AuditLog(
+            entity_type="container", entity_id=c.id, action="CONTAINER_UPDATED",
+            actor_id=user.id, details_json=json.dumps(changes),
+        ))
+    db.commit()
+    return _container_dict(db, c)
+
+
+@router.post("/{container_id}/unregister", response_model=ContainerOut)
+def unregister_container(
+    container_id: str,
+    payload: UnregisterRequest,
+    user: User = Depends(require_roles(*ASSET_ADMIN_ROLES)),
+    db: Session = Depends(get_db),
+):
+    """Take a container out of circulation: its tags stop working and it leaves all counts."""
+    c = db.get(Container, container_id)
+    if not c:
+        raise HTTPException(404, "Container not found")
+    _require_own_station(user, c)
+    try:
+        check_container_transition(c.status, "RETIRED")
+    except InvalidContainerTransition:
+        raise HTTPException(409, "Container is on an order. Unregister it once it is back in stock")
+
+    now = datetime.now(timezone.utc)
+    old_epc = None
+    for tag in db.query(RFIDTag).filter(
+            RFIDTag.container_id == c.id, RFIDTag.active == True):  # noqa: E712
+        old_epc = tag.epc
+        tag.active = False
+        tag.replaced_at = now
+
+    db.add(ContainerMovement(
+        container_id=c.id, from_status=c.status, to_status="RETIRED",
+        from_location_id=c.current_location_id, to_location_id=c.current_location_id,
+        reason="UNREGISTERED", reference_type="CONTAINER", reference_id=c.id,
+        actor_id=user.id,
+    ))
+    db.add(AuditLog(
+        entity_type="container", entity_id=c.id, action="CONTAINER_UNREGISTERED",
+        actor_id=user.id,
+        details_json=json.dumps({"epc": old_epc, "reason": payload.reason}),
+    ))
+    c.status = "RETIRED"
+    c.current_customer_id = None
+    db.commit()
+    return _container_dict(db, c)
+
+
+@router.post("/{container_id}/restore", response_model=ContainerOut)
+def restore_container(
+    container_id: str,
+    payload: RestoreRequest,
+    user: User = Depends(require_roles(*ASSET_ADMIN_ROLES)),
+    db: Session = Depends(get_db),
+):
+    """Bring an unregistered container back into stock under a new tag."""
+    c = db.get(Container, container_id)
+    if not c:
+        raise HTTPException(404, "Container not found")
+    _require_own_station(user, c)
+    if c.status != "RETIRED":
+        raise HTTPException(409, "Container is not unregistered")
+    if payload.location_id and not db.get(Location, payload.location_id):
+        raise HTTPException(404, "Location not found")
+    clash = db.query(RFIDTag).filter(
+        RFIDTag.epc == payload.epc, RFIDTag.active == True  # noqa: E712
+    ).first()
+    if clash:
+        raise HTTPException(409, f"EPC {payload.epc} already linked to container {clash.container_id}")
+
+    db.add(RFIDTag(epc=payload.epc, container_id=c.id, active=True))
+    db.add(ContainerMovement(
+        container_id=c.id, from_status="RETIRED", to_status="AVAILABLE",
+        from_location_id=c.current_location_id,
+        to_location_id=payload.location_id or c.current_location_id,
+        reason="RE_REGISTERED", reference_type="CONTAINER", reference_id=c.id,
+        actor_id=user.id,
+    ))
+    db.add(AuditLog(
+        entity_type="container", entity_id=c.id, action="CONTAINER_RESTORED",
+        actor_id=user.id, details_json=json.dumps({"epc": payload.epc}),
+    ))
+    c.status = "AVAILABLE"
+    if payload.location_id:
+        c.current_location_id = payload.location_id
+    db.commit()
+    return _container_dict(db, c)
+
+
 # ─── Read endpoints ────────────────────────────────────────────────
 
 # Fixed paths MUST come before /{container_id} so FastAPI does not treat them as an ID.
@@ -179,7 +324,10 @@ def container_summary(user: User = Depends(get_current_user),
     for status, count in db.query(
             Container.status, func.count(Container.id)).group_by(Container.status).all():
         by_status[status] = count
-    return {"total": sum(by_status.values()), "by_status": by_status}
+    return {
+        "total": sum(n for s, n in by_status.items() if s != "RETIRED"),
+        "by_status": by_status,
+    }
 
 
 @router.get("/lookup", response_model=ContainerOut)
@@ -211,12 +359,15 @@ def list_containers(
     status: str | None = None,
     location_id: str | None = None,
     type_code: str | None = None,
+    include_retired: bool = False,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     q = db.query(Container)
     if status:
         q = q.filter(Container.status == status)
+    elif not include_retired:
+        q = q.filter(Container.status != "RETIRED")
     if location_id:
         q = q.filter(Container.current_location_id == location_id)
     if type_code:

@@ -1,8 +1,12 @@
 import Link from "next/link";
+import { Badge } from "@/components/ui/badge";
+import { buttonClass } from "@/components/ui/button";
 import { Card, CardHeader, Detail, DetailGrid, EmptyState } from "@/components/ui/card";
 import { Page, PageHeader } from "@/components/ui/page";
 import { Table, Td, Th } from "@/components/ui/table";
 import { ContainerStatusBadge } from "@/features/containers/components/container-status-badge";
+import { exceptionTitle, parseDetails } from "@/features/exceptions/labels";
+import type { ExceptionRecord } from "@/features/exceptions/queries";
 import { OrderActions } from "@/features/orders/components/order-actions";
 import { PackingPanel } from "@/features/orders/components/packing-panel";
 import { OrderProgress } from "@/features/orders/components/order-progress";
@@ -19,11 +23,14 @@ import {
 export function OrderDetailView({
   order,
   options,
+  exceptions,
 }: {
   order: OrderDetail;
   options: OrderActionOptions;
+  exceptions: ExceptionRecord[];
 }) {
   const totalAssets = order.items.reduce((sum, item) => sum + item.quantity, 0);
+  const openIssues = exceptions.filter((exception) => exception.status === "OPEN").length;
 
   return (
     <Page>
@@ -38,6 +45,57 @@ export function OrderDetailView({
       {/* Keyed so dialog state resets after each step. */}
       <OrderActions key={order.status} order={order} options={options} />
       {order.status === "PACKING" && <PackingPanel order={order} options={options} />}
+
+      {exceptions.length > 0 && (
+        <Card>
+          <CardHeader
+            title="Issues raised"
+            description={
+              order.status === "DISPUTED"
+                ? `Why this order is disputed. ${openIssues} still open.`
+                : `${openIssues} open of ${exceptions.length}`
+            }
+            actions={
+              <Link href="/exceptions" className={buttonClass({ variant: "outline", size: "sm" })}>
+                All exceptions
+              </Link>
+            }
+          />
+          <ul className="divide-y divide-border/60 rounded-lg border border-border/60">
+            {exceptions.map((exception) => {
+              const { containerId } = parseDetails(exception.details);
+              return (
+                <li
+                  key={exception.id}
+                  className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3.5 text-sm"
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <Badge tone={exception.severity === "CRITICAL" ? "red" : "amber"}>
+                      {humanize(exception.severity)}
+                    </Badge>
+                    <span className="font-medium text-card-foreground">
+                      {exceptionTitle(exception.kind)}
+                    </span>
+                    {containerId && (
+                      <Link
+                        href={`/assets/${containerId}`}
+                        className="font-mono text-xs hover:text-primary hover:underline"
+                      >
+                        {containerId.toUpperCase()}
+                      </Link>
+                    )}
+                  </div>
+                  <span className="text-xs text-muted-foreground">
+                    {exception.status === "OPEN"
+                      ? `Open since ${formatDateTime(exception.created_at)}`
+                      : `Resolved ${formatDateTime(exception.resolved_at)}`}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
+      )}
 
       <Card>
         <CardHeader title="Order details" />

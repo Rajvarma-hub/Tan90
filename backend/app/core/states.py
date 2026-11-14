@@ -1,7 +1,7 @@
 """Container state machine — enforces legal transitions per POC §10."""
 
 ALLOWED_TRANSITIONS: dict[str, set[str]] = {
-    "AVAILABLE":              {"ALLOCATED", "PACKING", "DAMAGED", "QUARANTINED", "MISSING"},
+    "AVAILABLE":              {"ALLOCATED", "PACKING", "DAMAGED", "QUARANTINED", "MISSING", "RETIRED"},
     "ALLOCATED":              {"PACKING", "AVAILABLE"},
     "PACKING":                {"PACKED", "AVAILABLE"},
     "PACKED":                 {"IN_TRANSIT_TO_CUSTOMER", "PACKING", "AVAILABLE"},
@@ -10,9 +10,10 @@ ALLOWED_TRANSITIONS: dict[str, set[str]] = {
     "RETURN_REQUESTED":       {"IN_TRANSIT_TO_STATION"},
     "IN_TRANSIT_TO_STATION":  {"UNDER_INSPECTION"},
     "UNDER_INSPECTION":       {"AVAILABLE", "DAMAGED", "QUARANTINED"},
-    "DAMAGED":                {"UNDER_INSPECTION", "AVAILABLE"},
-    "QUARANTINED":            {"UNDER_INSPECTION", "AVAILABLE"},
-    "MISSING":                {"UNDER_INSPECTION", "AVAILABLE"},
+    "DAMAGED":                {"UNDER_INSPECTION", "AVAILABLE", "RETIRED"},
+    "QUARANTINED":            {"UNDER_INSPECTION", "AVAILABLE", "RETIRED"},
+    "MISSING":                {"UNDER_INSPECTION", "AVAILABLE", "RETIRED"},
+    "RETIRED":                {"AVAILABLE"},
 }
 
 

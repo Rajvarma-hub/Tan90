@@ -5,7 +5,7 @@ import { Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, EmptyState } from "@/components/ui/card";
-import { Dialog } from "@/components/ui/dialog";
+import { Dialog, DialogActions } from "@/components/ui/dialog";
 import { Field, FormError, Input, Select } from "@/components/ui/form";
 import { Page, PageHeader, Stat, StatGrid, Toolbar } from "@/components/ui/page";
 import { Table, Td, Th } from "@/components/ui/table";
@@ -80,9 +80,11 @@ function AddAssetDialog() {
             />
           </Field>
           <FormError message={error} />
-          <Button type="submit" disabled={pending} className="justify-self-start">
-            {pending ? "Adding…" : "Add Product"}
-          </Button>
+          <DialogActions onCancel={() => setOpen(false)}>
+            <Button type="submit" disabled={pending}>
+              {pending ? "Adding…" : "Add Product"}
+            </Button>
+          </DialogActions>
         </form>
       </Dialog>
     </>

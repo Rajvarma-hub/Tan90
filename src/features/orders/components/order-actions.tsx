@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Dialog } from "@/components/ui/dialog";
+import { Dialog, DialogActions } from "@/components/ui/dialog";
 import { Field, FormError, Input, Select } from "@/components/ui/form";
 import { ScanChecklist } from "@/features/containers/components/scan-checklist";
 import { runOrderAction } from "@/features/orders/actions";
@@ -69,7 +69,7 @@ export function OrderActions({
       buttons = (
         <>
           <Button onClick={() => open("approve")}>Approve Order</Button>
-          <Button variant="destructive" onClick={() => open("cancel")}>
+          <Button variant="danger" onClick={() => open("cancel")}>
             Cancel Order
           </Button>
         </>
@@ -85,7 +85,7 @@ export function OrderActions({
           >
             Start Packing
           </Button>
-          <Button variant="destructive" onClick={() => open("cancel")}>
+          <Button variant="danger" onClick={() => open("cancel")}>
             Cancel Order
           </Button>
         </>
@@ -191,10 +191,7 @@ export function OrderActions({
   const dialogFooter = (label: string, onSubmit?: () => void, blocked = false) => (
     <>
       <FormError message={error} />
-      <div className="flex justify-end gap-2">
-        <Button variant="outline" onClick={close}>
-          Back
-        </Button>
+      <DialogActions onCancel={close}>
         <Button
           type={onSubmit ? "button" : "submit"}
           disabled={pending || blocked}
@@ -202,7 +199,7 @@ export function OrderActions({
         >
           {pending ? "Working…" : label}
         </Button>
-      </div>
+      </DialogActions>
     </>
   );
 
@@ -262,10 +259,7 @@ export function OrderActions({
       >
         <div className="grid gap-4">
           <FormError message={error} />
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={close}>
-              Keep Order
-            </Button>
+          <DialogActions onCancel={close} cancelLabel="Keep Order">
             <Button
               variant="destructive"
               disabled={pending}
@@ -273,7 +267,7 @@ export function OrderActions({
             >
               {pending ? "Cancelling…" : "Cancel Order"}
             </Button>
-          </div>
+          </DialogActions>
         </div>
       </Dialog>
 

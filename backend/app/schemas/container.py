@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 
@@ -15,6 +17,7 @@ class ContainerOut(BaseModel):
     container_type: str
     capacity_litres: float
     status: str
+    created_at: datetime | None = None
     current_location_id: str | None
     current_customer_id: str | None
     epc: str | None = None
@@ -29,3 +32,18 @@ class ContainerOut(BaseModel):
 class ReplaceTagRequest(BaseModel):
     new_epc: str = Field(min_length=4, max_length=64)
     reason: str | None = None
+
+
+class ContainerUpdateRequest(BaseModel):
+    """Fix a container's type or move it to another location. Omitted fields stay as they are."""
+    container_type_code: str | None = Field(default=None, min_length=3, max_length=16)
+    location_id: str | None = None
+
+
+class UnregisterRequest(BaseModel):
+    reason: str | None = Field(default=None, max_length=200)
+
+
+class RestoreRequest(BaseModel):
+    epc: str = Field(min_length=4, max_length=64)
+    location_id: str | None = None

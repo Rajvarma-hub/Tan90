@@ -6,7 +6,7 @@ import { ArrowDownLeft, ArrowUpRight, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, EmptyState } from "@/components/ui/card";
-import { Dialog } from "@/components/ui/dialog";
+import { Dialog, DialogActions } from "@/components/ui/dialog";
 import { Field, FormError, Input, Select } from "@/components/ui/form";
 import { Page, PageHeader, Stat, StatGrid, Toolbar } from "@/components/ui/page";
 import { Tabs } from "@/components/ui/tabs";
@@ -154,14 +154,11 @@ function RecordMovementDialog({
             />
           </Field>
           <FormError message={error} />
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setOpen(false)}>
-              Cancel
-            </Button>
+          <DialogActions onCancel={() => setOpen(false)}>
             <Button type="submit" disabled={pending}>
               {pending ? "Saving…" : "Record Movement"}
             </Button>
-          </div>
+          </DialogActions>
         </form>
       </Dialog>
     </>

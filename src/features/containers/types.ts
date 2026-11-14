@@ -12,6 +12,8 @@ export type Container = {
   container_type: string;
   capacity_litres: number;
   status: string;
+  // When the container was first registered.
+  created_at: string;
   current_location_id: string | null;
   current_customer_id: string | null;
   epc: string | null;
@@ -23,7 +25,8 @@ export type Container = {
 };
 
 export type ContainerDetail = Container & {
-  created_at: string;
+  // How long ago the last movement was, e.g. "3 days".
+  sinceLastMove: string | null;
   orders: (ContainerOrderRef & { created_at: string })[];
   history: {
     id: string;
@@ -45,3 +48,18 @@ export type ContainerSummary = {
 };
 
 export type ContainerType = { code: string; name: string; capacity_litres: number };
+
+export type ContainerLocation = {
+  id: string;
+  code: string;
+  name: string;
+  warehouse: boolean;
+  team: { name: string; role: string }[];
+};
+
+export type ContainerCustomer = { id: string; name: string; contacts: string[] };
+
+export type ContainerDriver = { id: string; name: string };
+
+// Who is driving each order: the outbound delivery and the return pickup.
+export type OrderDrivers = Record<string, { delivery: string | null; pickup: string | null }>;

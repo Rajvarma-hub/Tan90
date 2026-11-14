@@ -59,6 +59,7 @@ def describe(db: Session, containers: list[Container]) -> list[dict]:
             "container_type": c.container_type,
             "capacity_litres": float(c.capacity_litres),
             "status": c.status,
+            "created_at": c.created_at,
             "current_location_id": c.current_location_id,
             "current_customer_id": c.current_customer_id,
             "epc": epcs.get(c.id),

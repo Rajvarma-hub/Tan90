@@ -2,8 +2,8 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { isActivePath, mainNav } from "@/config/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
+import { isActivePath, isChildActive, mainNav } from "@/config/navigation";
 import { siteConfig } from "@/config/site";
 import { cn } from "@/lib/utils";
 
@@ -18,6 +18,7 @@ export function AppSidebar({
   onNavigate: () => void;
 }) {
   const pathname = usePathname();
+  const view = useSearchParams().get("view");
 
   return (
     <aside
@@ -97,7 +98,7 @@ export function AppSidebar({
                     )}
                   >
                     {children.map((child) => {
-                      const childActive = isActivePath(pathname, child.href);
+                      const childActive = isChildActive(pathname, view, child, children);
                       return (
                         <li key={child.href}>
                           <Link

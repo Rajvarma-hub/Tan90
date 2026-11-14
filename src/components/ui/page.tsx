@@ -2,6 +2,7 @@ import type { Route } from "next";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
+import { CrumbLabel } from "@/components/layout/breadcrumb-label";
 import { cn } from "@/lib/utils";
 
 export function Page({ children }: { children: ReactNode }) {
@@ -27,6 +28,7 @@ export function PageHeader({
 }) {
   return (
     <header className="flex flex-col gap-2">
+      {back && <CrumbLabel label={title} />}
       {back && (
         <Link
           href={back.href}
@@ -53,7 +55,11 @@ export function PageHeader({
 }
 
 export function StatGrid({ children }: { children: ReactNode }) {
-  return <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">{children}</div>;
+  return (
+    <div className="grid grid-cols-2 gap-4 sm:grid-cols-[repeat(auto-fit,minmax(11rem,1fr))]">
+      {children}
+    </div>
+  );
 }
 
 // Clickable when `onClick` is given; `active` marks the selected filter.
@@ -61,11 +67,14 @@ export function Stat({
   label,
   value,
   active,
+  tone,
   onClick,
 }: {
   label: string;
   value: ReactNode;
   active?: boolean;
+  // Colours the number so a stat that needs attention stands out.
+  tone?: "red" | "amber" | "green";
   onClick?: () => void;
 }) {
   const className = cn(
@@ -76,7 +85,16 @@ export function Stat({
   const content = (
     <>
       <p className="text-xs font-medium text-muted-foreground">{label}</p>
-      <p className="mt-1 text-2xl font-semibold text-card-foreground">{value}</p>
+      <p
+        className={cn(
+          "mt-1 text-2xl font-semibold text-card-foreground",
+          tone === "red" && "text-red-400",
+          tone === "amber" && "text-amber-400",
+          tone === "green" && "text-emerald-400",
+        )}
+      >
+        {value}
+      </p>
     </>
   );
 

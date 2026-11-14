@@ -2,166 +2,84 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { Plus } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, EmptyState } from "@/components/ui/card";
-import { Dialog } from "@/components/ui/dialog";
-import { Field, FormError, Input, Select } from "@/components/ui/form";
+import { Input, Select } from "@/components/ui/form";
 import { Page, PageHeader, Stat, StatGrid, Toolbar } from "@/components/ui/page";
 import { PAGE_SIZE, Pagination } from "@/components/ui/pagination";
-import { ScanInput } from "@/components/ui/scan-input";
-import { Table, Td, Th } from "@/components/ui/table";
-import { lookupContainer, registerContainer } from "@/features/containers/actions";
+import { Cell, Table, Td, Th } from "@/components/ui/table";
+import { Tabs } from "@/components/ui/tabs";
+import { ContainerScan } from "@/features/containers/components/container-scan";
 import { ContainerStatusBadge } from "@/features/containers/components/container-status-badge";
+import {
+  CustomerTracking,
+  DriverTracking,
+  LocationTracking,
+  type ShowFilter,
+} from "@/features/containers/components/container-tracking";
+import { RegisterDialog } from "@/features/containers/components/register-dialog";
 import {
   containerBuckets,
   containerStatusMeta,
   containerStatuses,
+  NEEDS_ATTENTION,
   whereabouts,
 } from "@/features/containers/status";
 import type {
   Container,
+  ContainerCustomer,
+  ContainerDriver,
+  ContainerLocation,
   ContainerSummary,
   ContainerType,
+  OrderDrivers,
 } from "@/features/containers/types";
+import {
+  containerViewMeta,
+  containerViews,
+  parseView,
+  viewHref,
+} from "@/features/containers/views";
 import type { Option } from "@/features/orders/types";
-import { useServerAction } from "@/hooks/use-server-action";
 import { formatNumber } from "@/lib/format";
-
-function RegisterDialog({
-  types,
-  stations,
-}: {
-  types: ContainerType[];
-  stations: Option[];
-}) {
-  const [open, setOpen] = useState(false);
-  const [epc, setEpc] = useState("");
-  const [typeCode, setTypeCode] = useState("");
-  const [locationId, setLocationId] = useState("");
-  const [created, setCreated] = useState<string | null>(null);
-  const { run, pending, error, clearError } = useServerAction(
-    registerContainer,
-    (container) => {
-      // Stay open so several containers can be registered in a row.
-      setCreated(container.code);
-      setEpc("");
-    },
-  );
-
-  return (
-    <>
-      <Button
-        onClick={() => {
-          clearError();
-          setCreated(null);
-          setOpen(true);
-        }}
-      >
-        <Plus /> Register Container
-      </Button>
-      <Dialog
-        open={open}
-        onClose={() => setOpen(false)}
-        title="Register Container"
-        description="Scan the new container's tag, then pick its type and where it is. The container code is generated."
-      >
-        <form
-          className="grid gap-4"
-          onSubmit={(event) => {
-            event.preventDefault();
-            setCreated(null);
-            run({ epc, typeCode, locationId });
-          }}
-        >
-          <Field label="Tag ID" hint={epc ? undefined : "Scan the tag or type its ID."}>
-            {epc ? (
-              <div className="flex items-center gap-2">
-                <Input readOnly className="flex-1 font-mono" value={epc} />
-                <Button variant="outline" onClick={() => setEpc("")}>
-                  Rescan
-                </Button>
-              </div>
-            ) : (
-              <ScanInput onScan={setEpc} autoFocus />
-            )}
-          </Field>
-          <Field label="Container type">
-            <Select
-              required
-              value={typeCode}
-              onChange={(event) => setTypeCode(event.target.value)}
-            >
-              <option value="">Select type</option>
-              {types.map((type) => (
-                <option key={type.code} value={type.code}>
-                  {type.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Location">
-            <Select
-              required
-              value={locationId}
-              onChange={(event) => setLocationId(event.target.value)}
-            >
-              <option value="">Select location</option>
-              {stations.map((station) => (
-                <option key={station.id} value={station.id}>
-                  {station.label}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          {created && (
-            <p role="status" className="text-sm text-emerald-400">
-              Registered {created}. Scan the next tag to add another.
-            </p>
-          )}
-          <FormError message={error} />
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setOpen(false)}>
-              Done
-            </Button>
-            <Button type="submit" disabled={pending || !epc}>
-              {pending ? "Registering…" : "Register"}
-            </Button>
-          </div>
-        </form>
-      </Dialog>
-    </>
-  );
-}
 
 export function ContainerList({
   containers,
   summary,
   types,
   stations,
+  locations,
+  customers,
+  drivers,
+  orderDrivers,
 }: {
   containers: Container[];
   summary: ContainerSummary;
   types: ContainerType[];
   stations: Option[];
+  locations: ContainerLocation[];
+  customers: ContainerCustomer[];
+  drivers: ContainerDriver[];
+  orderDrivers: OrderDrivers;
 }) {
   const router = useRouter();
+  const view = parseView(useSearchParams().get("view"));
   const [search, setSearch] = useState("");
+  const [ids, setIds] = useState<string[] | null>(null);
   const [statuses, setStatuses] = useState<string[] | null>(null);
   const [status, setStatus] = useState("");
   const [locationId, setLocationId] = useState("");
   const [type, setType] = useState("");
   const [page, setPage] = useState(1);
-  const lookup = useServerAction(lookupContainer, (container) =>
-    router.push(`/assets/${container.id}`),
-  );
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
     return containers.filter(
       (c) =>
-        (!statuses || statuses.includes(c.status)) &&
+        (view !== "attention" || NEEDS_ATTENTION.includes(c.status)) &&
+        (view !== "all" || !ids || ids.includes(c.id)) &&
+        (view !== "all" || !statuses || statuses.includes(c.status)) &&
         (!status || c.status === status) &&
         (!locationId || c.current_location_id === locationId) &&
         (!type || c.container_type === type) &&
@@ -178,19 +96,49 @@ export function ContainerList({
             .toLowerCase()
             .includes(term)),
     );
-  }, [containers, search, statuses, status, locationId, type]);
+  }, [containers, view, ids, search, statuses, status, locationId, type]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);
   const rows = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
   const resetPage = () => setPage(1);
+  const hasFilters = Boolean(
+    search || (view === "all" && (ids || statuses)) || status || locationId || type,
+  );
+
+  function clearFilters() {
+    setSearch("");
+    setIds(null);
+    setStatuses(null);
+    setStatus("");
+    setLocationId("");
+    setType("");
+    resetPage();
+  }
+
+  // Tracking cards and rows hand off to the table, filtered to exactly what they counted.
+  function showContainers(filter: ShowFilter) {
+    setSearch("");
+    setIds(filter.ids ?? null);
+    setStatuses(filter.statuses ?? null);
+    setStatus("");
+    setLocationId(filter.locationId ?? "");
+    setType("");
+    resetPage();
+    router.push(viewHref("all"));
+  }
 
   return (
     <Page>
       <PageHeader
         title="Containers"
         description="Containers tracked by RFID tag and barcode label."
-        actions={<RegisterDialog types={types} stations={stations} />}
+        actions={
+          <>
+            <ContainerScan className="w-64" />
+            <RegisterDialog types={types} stations={stations} />
+          </>
+        }
       />
 
       <StatGrid>
@@ -207,8 +155,10 @@ export function ContainerList({
               value={formatNumber(count)}
               active={active}
               onClick={() => {
+                setIds(null);
                 setStatuses(active ? null : bucket.statuses);
                 setStatus("");
+                router.push(viewHref("all"));
                 resetPage();
               }}
             />
@@ -218,27 +168,50 @@ export function ContainerList({
 
       <Card>
         <CardHeader
-          title="All containers"
-          description={`${filtered.length} of ${summary.total} shown`}
+          title={containerViewMeta[view].title}
+          description={
+            view === "all" || view === "attention"
+              ? `${filtered.length} shown · ${containerViewMeta[view].description}`
+              : containerViewMeta[view].description
+          }
+          actions={
+            <Tabs
+              value={view}
+              onChange={(next) => router.push(viewHref(next))}
+              options={containerViews.map((value) => ({
+                value,
+                label: containerViewMeta[value].tab,
+              }))}
+            />
+          }
         />
 
+        {view === "locations" && (
+          <LocationTracking containers={containers} locations={locations} onShow={showContainers} />
+        )}
+        {view === "customers" && (
+          <CustomerTracking
+            containers={containers}
+            customers={customers}
+            onShow={showContainers}
+          />
+        )}
+        {view === "drivers" && (
+          <DriverTracking
+            containers={containers}
+            drivers={drivers}
+            orderDrivers={orderDrivers}
+            onShow={showContainers}
+          />
+        )}
+
+        {(view === "all" || view === "attention") && (
+          <>
         <Toolbar>
-          <div className="min-w-56 flex-1">
-            <ScanInput
-              placeholder="Scan a container to open it"
-              disabled={lookup.pending}
-              onScan={(code) => lookup.run({ code })}
-            />
-            {lookup.error && (
-              <p role="alert" className="mt-1 text-sm text-red-400">
-                {lookup.error}
-              </p>
-            )}
-          </div>
           <Input
             type="search"
             className="min-w-56 flex-1"
-            placeholder="Search code, tag, order, customer…"
+            placeholder="Search code, tag, order or customer"
             value={search}
             onChange={(event) => {
               setSearch(event.target.value);
@@ -256,7 +229,7 @@ export function ContainerList({
             }}
           >
             <option value="">All statuses</option>
-            {containerStatuses.map((value) => (
+            {(view === "attention" ? NEEDS_ATTENTION : containerStatuses).map((value) => (
               <option key={value} value={value}>
                 {containerStatusMeta[value].label}
               </option>
@@ -294,6 +267,11 @@ export function ContainerList({
               </option>
             ))}
           </Select>
+          {hasFilters && (
+            <Button variant="ghost" onClick={clearFilters}>
+              Clear filters
+            </Button>
+          )}
         </Toolbar>
 
         {rows.length === 0 ? (
@@ -302,50 +280,61 @@ export function ContainerList({
           <Table>
             <thead>
               <tr>
-                <Th>Container</Th>
+                <Th>Container and tag</Th>
                 <Th className="text-center">Type</Th>
                 <Th className="text-center">Status</Th>
-                <Th>Location</Th>
-                <Th>Order</Th>
+                <Th>Where it is</Th>
+                <Th>On order</Th>
               </tr>
             </thead>
             <tbody>
               {rows.map((container) => (
-                <tr key={container.id} className="transition-colors hover:bg-accent/50">
+                <tr
+                  key={container.id}
+                  onClick={() => router.push(`/assets/${container.id}`)}
+                  className="cursor-pointer transition-colors hover:bg-accent/50"
+                >
                   <Td>
-                    <Link
-                      href={`/assets/${container.id}`}
-                      className="font-medium hover:text-primary hover:underline"
+                    <Cell
+                      main={
+                        <Link
+                          href={`/assets/${container.id}`}
+                          onClick={(event) => event.stopPropagation()}
+                          className="hover:text-primary hover:underline"
+                        >
+                          {container.container_code}
+                        </Link>
+                      }
                     >
-                      {container.container_code}
-                    </Link>
-                    <div className="font-mono text-xs text-muted-foreground">
-                      {container.epc ?? "No tag"}
-                    </div>
+                      <span className="font-mono">{container.epc ?? "No tag"}</span>
+                    </Cell>
                   </Td>
                   <Td className="text-center">{container.container_type}</Td>
                   <Td className="text-center">
                     <ContainerStatusBadge status={container.status} />
                   </Td>
                   <Td>
-                    <div>{whereabouts(container).primary}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {whereabouts(container).secondary}
-                    </div>
+                    <Cell main={whereabouts(container).primary}>
+                      {whereabouts(container).secondary && (
+                        <span>{whereabouts(container).secondary}</span>
+                      )}
+                    </Cell>
                   </Td>
                   <Td>
                     {container.current_order ? (
-                      <>
-                        <Link
-                          href={`/orders/${container.current_order.id}`}
-                          className="font-medium hover:text-primary hover:underline"
-                        >
-                          {container.current_order.order_number}
-                        </Link>
-                        <div className="text-xs text-muted-foreground">
-                          {container.current_order.customer_name}
-                        </div>
-                      </>
+                      <Cell
+                        main={
+                          <Link
+                            href={`/orders/${container.current_order.id}`}
+                            onClick={(event) => event.stopPropagation()}
+                            className="hover:text-primary hover:underline"
+                          >
+                            {container.current_order.order_number}
+                          </Link>
+                        }
+                      >
+                        <span>{container.current_order.customer_name}</span>
+                      </Cell>
                     ) : (
                       <span className="text-muted-foreground">—</span>
                     )}
@@ -363,6 +352,8 @@ export function ContainerList({
           noun={filtered.length === 1 ? "container" : "containers"}
           onPage={setPage}
         />
+          </>
+        )}
       </Card>
     </Page>
   );

@@ -13,3 +13,25 @@ export const replaceTagSchema = z.object({
 });
 
 export const lookupSchema = z.object({ code: z.string().trim().min(1).max(64) });
+
+const epc = z.string().trim().min(4).max(64);
+
+// Null fields stay as they are.
+export const editContainerSchema = z.object({
+  containerId: z.string().min(1).max(64),
+  newEpc: epc.nullable(),
+  typeCode: z.string().min(3).max(16).nullable(),
+  locationId: z.string().min(1).max(64).nullable(),
+  reason: z.string().trim().max(200).nullable(),
+});
+
+export const unregisterContainerSchema = z.object({
+  containerId: z.string().min(1).max(64),
+  reason: z.string().trim().max(200).nullable(),
+});
+
+export const restoreContainerSchema = z.object({
+  containerId: z.string().min(1).max(64),
+  epc,
+  locationId: z.string().min(1).max(64).nullable(),
+});

@@ -3,8 +3,10 @@ import { Card, CardHeader, Detail, DetailGrid, EmptyState } from "@/components/u
 import { Page, PageHeader } from "@/components/ui/page";
 import { Table, Td, Th } from "@/components/ui/table";
 import { ContainerStatusBadge } from "@/features/containers/components/container-status-badge";
+import { ContainerProgress } from "@/features/containers/components/container-progress";
+import { ContainerScan } from "@/features/containers/components/container-scan";
 import { ReplaceTagDialog } from "@/features/containers/components/replace-tag-dialog";
-import { containerStatusMeta, whereabouts } from "@/features/containers/status";
+import { containerStatusMeta, moveWhere, whereabouts } from "@/features/containers/status";
 import type { ContainerDetail } from "@/features/containers/types";
 import { OrderStatusBadge } from "@/features/orders/components/order-status-badge";
 import type { OrderStatus } from "@/features/orders/types";
@@ -14,6 +16,8 @@ const statusLabel = (status: string | null) =>
   status ? (containerStatusMeta[status]?.label ?? humanize(status)) : "New";
 
 export function ContainerDetailView({ container }: { container: ContainerDetail }) {
+  const lastMove = container.history[0];
+
   return (
     <Page>
       <PageHeader
@@ -21,8 +25,15 @@ export function ContainerDetailView({ container }: { container: ContainerDetail 
         title={container.container_code}
         badge={<ContainerStatusBadge status={container.status} />}
         description={container.container_type}
-        actions={<ReplaceTagDialog containerId={container.id} />}
+        actions={
+          <>
+            <ContainerScan className="w-64" />
+            <ReplaceTagDialog containerId={container.id} />
+          </>
+        }
       />
+
+      <ContainerProgress status={container.status} />
 
       <Card>
         <CardHeader title="Container details" />
@@ -36,7 +47,13 @@ export function ContainerDetailView({ container }: { container: ContainerDetail 
               .filter(Boolean)
               .join(" · ")}
           </Detail>
+          <Detail label="Last movement">
+            {lastMove
+              ? `${container.sinceLastMove} ago · ${formatDateTime(lastMove.occurred_at)}`
+              : "—"}
+          </Detail>
           <Detail label="Registered">{formatDate(container.created_at)}</Detail>
+          <Detail label="Orders so far">{container.orders.length}</Detail>
           <div className="sm:col-span-2">
             <Detail label="Linked order">
               {container.current_order ? (
@@ -117,7 +134,7 @@ export function ContainerDetailView({ container }: { container: ContainerDetail 
                     </p>
                     <p className="text-xs text-muted-foreground">
                       {humanize(move.reason)}
-                      {move.to_location && ` · ${move.to_location}`}
+                      {moveWhere(move) && ` · ${moveWhere(move)}`}
                       {move.order_id && (
                         <>
                           {" · "}

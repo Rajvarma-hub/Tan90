@@ -80,6 +80,8 @@ def _cm(db: Session, c: Container, to: str, reason: str,
     c.status = to
     if customer_id is not None:
         c.current_customer_id = customer_id
+    elif to in ("UNDER_INSPECTION", "AVAILABLE", "DAMAGED", "QUARANTINED"):
+        c.current_customer_id = None
     if location_id is not None:
         c.current_location_id = location_id
 
@@ -477,6 +479,16 @@ def seed_reference(db: Session):
     ])
 
 
+def _register(db: Session, container_id: str, loc_id: str, days: float = 30) -> None:
+    """First entry of a container's history, matching POST /api/containers."""
+    db.add(ContainerMovement(
+        container_id=container_id, from_status=None, to_status="AVAILABLE",
+        from_location_id=None, to_location_id=loc_id, reason="REGISTERED",
+        reference_type="CONTAINER", reference_id=container_id,
+        actor_id="usr-ops1", occurred_at=ago(days=days),
+    ))
+
+
 def seed_containers(db: Session):
     plan = [
         ("loc-fs-blr", [("SHIP-20", 8), ("SHIP-40", 5), ("SHIP-60", 3), ("ICE-50", 4)]),
@@ -487,7 +499,10 @@ def seed_containers(db: Session):
         ("loc-wh-chn", [("SHIP-20", 4)]),
     ]
     n = 0
+    # Newer sites registered their containers more recently.
+    age_by_location = {"loc-fs-hyd": 12, "loc-fs-del": 12, "loc-wh-chn": 20}
     for loc_id, items in plan:
+        age = age_by_location.get(loc_id, 30)
         for type_code, count in items:
             type_name, capacity = CONTAINER_TYPES[type_code]
             for _ in range(count):
@@ -497,24 +512,46 @@ def seed_containers(db: Session):
                     id=cid, container_code=f"CON-{n:06d}",
                     container_type=type_name, capacity_litres=capacity,
                     status="AVAILABLE", current_location_id=loc_id,
+                    created_at=ago(days=age),
                 ))
                 db.add(RFIDTag(id=f"tag-{n:06d}", epc=epc_for(n),
-                               container_id=cid, active=True))
+                               container_id=cid, active=True,
+                               created_at=ago(days=age)))
+                _register(db, cid, loc_id, age)
 
     # con-000061 has no RFID tag yet (barcode only).
     type_name, capacity = CONTAINER_TYPES["SHIP-20"]
     db.add(Container(id="con-000061", container_code="CON-000061",
                      container_type=type_name, capacity_litres=capacity,
-                     status="AVAILABLE", current_location_id="loc-fs-blr"))
+                     status="AVAILABLE", current_location_id="loc-fs-blr",
+                     created_at=ago(days=3)))
+    _register(db, "con-000061", "loc-fs-blr", 3)
 
     # con-000062 had its tag replaced: old tag inactive, new tag active.
     db.add(Container(id="con-000062", container_code="CON-000062",
                      container_type=type_name, capacity_litres=capacity,
-                     status="AVAILABLE", current_location_id="loc-fs-blr"))
+                     status="AVAILABLE", current_location_id="loc-fs-blr",
+                     created_at=ago(days=30)))
+    _register(db, "con-000062", "loc-fs-blr")
     db.add(RFIDTag(id="tag-000062-old", epc=epc_for(9062), container_id="con-000062",
                    active=False, created_at=ago(days=30), replaced_at=ago(days=6)))
     db.add(RFIDTag(id="tag-000062", epc=epc_for(62), container_id="con-000062",
                    active=True, created_at=ago(days=6)))
+
+    # con-000063 was unregistered: tag deactivated, out of circulation.
+    db.add(Container(id="con-000063", container_code="CON-000063",
+                     container_type=type_name, capacity_litres=capacity,
+                     status="RETIRED", current_location_id="loc-fs-chn",
+                     created_at=ago(days=60)))
+    _register(db, "con-000063", "loc-fs-chn", 60)
+    db.add(RFIDTag(id="tag-000063", epc=epc_for(63), container_id="con-000063",
+                   active=False, created_at=ago(days=60), replaced_at=ago(days=8)))
+    db.add(ContainerMovement(
+        container_id="con-000063", from_status="DAMAGED", to_status="RETIRED",
+        from_location_id="loc-fs-chn", to_location_id="loc-fs-chn",
+        reason="UNREGISTERED", reference_type="CONTAINER", reference_id="con-000063",
+        actor_id="usr-fschn", occurred_at=ago(days=8),
+    ))
 
 
 def seed_inventory(db: Session):
@@ -676,7 +713,7 @@ def seed_orders(db: Session):
               customer_id="cust-hyperpure", station_id="loc-fs-blr",
               destination="Hyperpure DC, Whitefield",
               status="PENDING_OPS_APPROVAL", created_by=OP1, created_at=t0,
-              expected_delivery_at=t0 + timedelta(days=1))
+              expected_delivery_at=t0 + timedelta(days=3))
     db.add(o)
     db.add(OrderItem(id="oi-ord-5-1", order_id="ord-5",
                      product_id="prd-pcm-pos5", quantity=6))
@@ -701,7 +738,7 @@ def seed_orders(db: Session):
               customer_id="cust-instamart", station_id="loc-fs-blr",
               destination="Instamart Hub, Koramangala",
               status="PENDING_OPS_APPROVAL", created_by=OP1, created_at=t0,
-              expected_delivery_at=t0 + timedelta(days=1))
+              expected_delivery_at=t0 + timedelta(days=2, hours=6))
     db.add(o)
     db.add(OrderItem(id="oi-ord-6-1", order_id="ord-6",
                      product_id="prd-pcm-neg24", quantity=4))
@@ -858,8 +895,9 @@ def seed_orders(db: Session):
     step_deliver(db, o, task, DR1, t0 + timedelta(minutes=430))
     step_confirm(db, o, sess, "cust-blinkit", CB, CB,
                  t0 + timedelta(minutes=500))
-    step_return_request(db, o, sess, "cust-blinkit", CB, CB,
-                        t0 + timedelta(minutes=1500))
+    ret = step_return_request(db, o, sess, "cust-blinkit", CB, CB,
+                              t0 + timedelta(minutes=1500))
+    step_return_assign(db, o, ret, DR2, OP1, t0 + timedelta(minutes=1560))
     _notif_role(db, "OPERATIONS_ADMIN", "RETURN_REQUESTED",
                 "Return requested: ORD-0011",
                 "2 containers", "order", o.id,
@@ -1150,7 +1188,7 @@ def seed_extra_container_states(db: Session):
     _cm(db, c, "MISSING", "CYCLE_COUNT_MISSING", "INSPECTION", "seed",
         "usr-fsdel", ago(days=2))
     db.add(ExceptionRecord(
-        id="exc-demo-5", kind="MISSING_ON_DELIVERY", severity="CRITICAL",
+        id="exc-demo-5", kind="MISSING_AT_STATION", severity="CRITICAL",
         status="OPEN", reference_type="CONTAINER", reference_id="con-000049",
         details_json=json.dumps({"container_id": "con-000049"}),
         created_at=ago(days=2),
@@ -1267,7 +1305,7 @@ def seed() -> None:
         seed_exceptions(db)
         seed_notifications(db)
         db.commit()
-        print("Seed complete: 27 users, 62 containers, 20 orders "
+        print("Seed complete: 27 users, 63 containers, 20 orders "
               "(every order and container state populated).")
     finally:
         db.close()

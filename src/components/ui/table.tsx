@@ -1,5 +1,28 @@
-import type { ComponentProps } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { cn } from "@/lib/utils";
+
+// One-line explanation above a table: how to read it and how it is sorted.
+export function TableCaption({ children }: { children: ReactNode }) {
+  return <p className="mb-4 text-sm text-muted-foreground">{children}</p>;
+}
+
+// The standard cell: the main fact on top, supporting facts in small muted lines below.
+export function Cell({
+  main,
+  children,
+  className,
+}: {
+  main: ReactNode;
+  children?: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={cn("grid gap-0.5", className)}>
+      <div className="text-sm font-medium text-card-foreground">{main}</div>
+      {children && <div className="grid gap-0.5 text-xs text-muted-foreground">{children}</div>}
+    </div>
+  );
+}
 
 export function Table({ className, ...props }: ComponentProps<"table">) {
   return (
