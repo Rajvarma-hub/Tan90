@@ -170,9 +170,9 @@ export function AssetInventory({
                   <Th>Name</Th>
                   <Th>SKU</Th>
                   <Th>Category</Th>
-                  <Th>Setpoint</Th>
-                  <Th className="text-right">Stations</Th>
-                  <Th className="text-right">In Stock</Th>
+                  <Th className="text-center">Setpoint</Th>
+                  <Th className="text-center">Stations</Th>
+                  <Th className="text-center">In Stock</Th>
                 </tr>
               </thead>
               <tbody>
@@ -183,9 +183,11 @@ export function AssetInventory({
                     <Td>
                       <Badge tone={asset.category.tone}>{asset.category.label}</Badge>
                     </Td>
-                    <Td>{formatSetpoint(asset.setpoint_c)}</Td>
-                    <Td className="text-right tabular-nums">{asset.stations}</Td>
-                    <Td className="text-right font-medium tabular-nums">
+                    <Td className="text-center tabular-nums">
+                      {formatSetpoint(asset.setpoint_c)}
+                    </Td>
+                    <Td className="text-center tabular-nums">{asset.stations}</Td>
+                    <Td className="text-center font-medium tabular-nums">
                       {formatNumber(asset.inStock)}
                     </Td>
                   </tr>
@@ -233,7 +235,7 @@ export function AssetInventory({
                   <Th>Asset Name</Th>
                   <Th>Category</Th>
                   <Th>Station Name</Th>
-                  <Th className="text-right">In Stock</Th>
+                  <Th className="text-center">In Stock</Th>
                 </tr>
               </thead>
               <tbody>
@@ -259,8 +261,8 @@ export function AssetInventory({
                       <Td
                         className={
                           row.quantity === 0
-                            ? "text-right font-medium text-red-400 tabular-nums"
-                            : "text-right font-medium tabular-nums"
+                            ? "text-center font-medium text-red-400 tabular-nums"
+                            : "text-center font-medium tabular-nums"
                         }
                       >
                         {formatNumber(row.quantity)}

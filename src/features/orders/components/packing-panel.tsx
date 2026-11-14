@@ -146,7 +146,7 @@ export function PackingPanel({
               <tr>
                 <Th>Container</Th>
                 {items.map((item) => (
-                  <Th key={item.sku} className="text-right">
+                  <Th key={item.sku} className="text-center">
                     {item.sku}
                   </Th>
                 ))}
@@ -168,13 +168,13 @@ export function PackingPanel({
                     </div>
                   </Td>
                   {items.map((item) => (
-                    <Td key={item.sku} className="text-right">
+                    <Td key={item.sku} className="text-center">
                       <Input
                         type="number"
                         min={0}
                         max={item.ordered}
                         aria-label={`${item.sku} in ${container.container_code}`}
-                        className="w-20 text-right"
+                        className="mx-auto w-20 text-center"
                         value={quantities[container.container_id]?.[item.sku] ?? ""}
                         placeholder="0"
                         onChange={(event) =>
@@ -219,7 +219,7 @@ export function PackingPanel({
                     <Td
                       key={item.sku}
                       className={cn(
-                        "border-b-0 text-right font-medium tabular-nums",
+                        "border-b-0 text-center font-medium tabular-nums",
                         done === item.ordered ? "text-emerald-400" : "text-amber-400",
                       )}
                     >

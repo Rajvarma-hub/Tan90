@@ -155,7 +155,7 @@ export function OrdersTable({
               <Th>Customer</Th>
               <Th>Freezing Station</Th>
               <Th>Status</Th>
-              <Th className="text-right">Assets</Th>
+              <Th className="text-center">Assets</Th>
               <Th>Delivery Date</Th>
             </tr>
           </thead>
@@ -186,7 +186,7 @@ export function OrdersTable({
                 <Td>
                   <OrderStatusBadge status={order.status} />
                 </Td>
-                <Td className="text-right tabular-nums">
+                <Td className="text-center tabular-nums">
                   <div>{formatNumber(order.totalQuantity)}</div>
                   <div className="text-xs text-muted-foreground">
                     {order.itemCount} {order.itemCount === 1 ? "item" : "items"}

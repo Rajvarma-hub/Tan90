@@ -91,8 +91,8 @@ export function OrderDetailView({
             <tr>
               <Th>Asset</Th>
               <Th>SKU</Th>
-              <Th>Setpoint</Th>
-              <Th className="text-right">Quantity</Th>
+              <Th className="text-center">Setpoint</Th>
+              <Th className="text-center">Quantity</Th>
             </tr>
           </thead>
           <tbody>
@@ -100,8 +100,10 @@ export function OrderDetailView({
               <tr key={item.id}>
                 <Td>{item.product_name}</Td>
                 <Td className="font-mono text-xs">{item.sku ?? "—"}</Td>
-                <Td>{formatSetpoint(item.setpoint_c)}</Td>
-                <Td className="text-right tabular-nums">
+                <Td className="text-center tabular-nums">
+                  {formatSetpoint(item.setpoint_c)}
+                </Td>
+                <Td className="text-center tabular-nums">
                   {formatNumber(item.quantity)}
                 </Td>
               </tr>
