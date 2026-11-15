@@ -1,7 +1,8 @@
 import type { Route } from "next";
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, type LucideIcon } from "lucide-react";
+import type { BadgeTone } from "@/components/ui/badge";
 import { CrumbLabel } from "@/components/layout/breadcrumb-label";
 import { cn } from "@/lib/utils";
 
@@ -56,48 +57,76 @@ export function PageHeader({
 
 export function StatGrid({ children }: { children: ReactNode }) {
   return (
-    <div className="grid grid-cols-2 gap-4 sm:grid-cols-[repeat(auto-fit,minmax(11rem,1fr))]">
+    <div className="grid grid-cols-2 gap-4 sm:grid-cols-[repeat(auto-fit,minmax(12.5rem,1fr))]">
       {children}
     </div>
   );
 }
 
-// Clickable when `onClick` is given; `active` marks the selected filter.
+const statTones: Record<BadgeTone, { border: string; chip: string; value: string }> = {
+  gray: { border: "border-border", chip: "bg-muted text-muted-foreground", value: "text-card-foreground" },
+  blue: { border: "border-border", chip: "bg-primary/15 text-primary", value: "text-card-foreground" },
+  green: { border: "border-border", chip: "bg-primary/15 text-primary", value: "text-card-foreground" },
+  amber: {
+    border: "border-amber-500/30",
+    chip: "bg-amber-500/15 text-amber-400",
+    value: "text-amber-400",
+  },
+  red: {
+    border: "border-red-500/30",
+    chip: "bg-red-500/15 text-red-400",
+    value: "text-red-400",
+  },
+};
+
+// Blue is the one accent. Amber and red are the only colours that change a card, and only for a number that needs attention.
+// A link when `href` is given, a filter button when `onClick` is; `active` marks the selected filter.
 export function Stat({
   label,
   value,
+  icon: Icon,
+  tone = "blue",
   active,
-  tone,
+  href,
   onClick,
 }: {
   label: string;
   value: ReactNode;
+  icon: LucideIcon;
+  tone?: BadgeTone;
   active?: boolean;
-  // Colours the number so a stat that needs attention stands out.
-  tone?: "red" | "amber" | "green";
+  href?: Route;
   onClick?: () => void;
 }) {
+  const style = statTones[tone];
   const className = cn(
-    "flex flex-col items-center justify-center rounded-xl border bg-card p-4 text-center",
-    onClick && "transition-colors hover:bg-accent",
-    active && "border-primary ring-1 ring-primary",
+    "flex items-center gap-3.5 rounded-xl border bg-card p-4 text-left",
+    active ? "border-primary ring-1 ring-primary" : style.border,
+    (onClick || href) && "transition-colors hover:bg-accent",
   );
   const content = (
     <>
-      <p className="text-xs font-medium text-muted-foreground">{label}</p>
-      <p
-        className={cn(
-          "mt-1 text-2xl font-semibold text-card-foreground",
-          tone === "red" && "text-red-400",
-          tone === "amber" && "text-amber-400",
-          tone === "green" && "text-emerald-400",
-        )}
+      <span
+        className={cn("flex size-11 shrink-0 items-center justify-center rounded-lg", style.chip)}
       >
-        {value}
-      </p>
+        <Icon className="size-5" />
+      </span>
+      <span className="min-w-0">
+        <span className="block truncate text-xs font-medium text-muted-foreground">{label}</span>
+        <span className={cn("mt-0.5 block text-2xl font-semibold tabular-nums", style.value)}>
+          {value}
+        </span>
+      </span>
     </>
   );
 
+  if (href) {
+    return (
+      <Link href={href} className={className}>
+        {content}
+      </Link>
+    );
+  }
   if (onClick) {
     return (
       <button type="button" aria-pressed={active} onClick={onClick} className={className}>

@@ -68,7 +68,7 @@ export function AppSidebar({
       </div>
 
       <nav aria-label="Main" className="flex-1 overflow-x-hidden overflow-y-auto p-2">
-        <ul className="flex flex-col gap-1">
+        <ul className="flex flex-col gap-3">
           {mainNav.map(({ title, href, icon: Icon, children }) => {
             const active = isActivePath(pathname, href);
             return (
@@ -79,10 +79,9 @@ export function AppSidebar({
                   title={collapsed ? title : undefined}
                   aria-current={pathname === href ? "page" : undefined}
                   className={cn(
-                    "flex h-8 items-center gap-2 rounded-md p-2 text-sm outline-none transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-ring",
-                    active &&
-                      "bg-sidebar-accent font-medium text-sidebar-accent-foreground",
-                    collapsed && "md:w-8",
+                    "flex h-9 items-center gap-2.5 rounded-md px-2.5 text-sm outline-none transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-ring",
+                    active && "bg-primary/10 font-medium text-primary hover:bg-primary/15 hover:text-primary",
+                    collapsed && "md:w-8 md:px-2",
                   )}
                 >
                   <Icon className="size-4 shrink-0" />
@@ -90,15 +89,15 @@ export function AppSidebar({
                     {title}
                   </span>
                 </Link>
-                {children && active && (
+                {children && (
                   <ul
                     className={cn(
-                      "mt-1 ml-3.5 flex flex-col gap-1 border-l pl-2.5",
+                      "mt-1 ml-4 flex flex-col gap-0.5 border-l pl-2.5",
                       collapsed && "md:hidden",
                     )}
                   >
                     {children.map((child) => {
-                      const childActive = isChildActive(pathname, view, child, children);
+                      const childActive = active && isChildActive(pathname, view, child, children);
                       return (
                         <li key={child.href}>
                           <Link
@@ -106,9 +105,9 @@ export function AppSidebar({
                             onClick={onNavigate}
                             aria-current={childActive ? "page" : undefined}
                             className={cn(
-                              "flex h-7 items-center rounded-md px-2 text-sm outline-none transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-ring",
+                              "flex h-7 items-center rounded-md px-2 text-[13px] text-muted-foreground outline-none transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-ring",
                               childActive &&
-                                "bg-sidebar-accent font-medium text-sidebar-accent-foreground",
+                                "bg-primary/10 font-medium text-primary hover:bg-primary/15 hover:text-primary",
                             )}
                           >
                             <span className="truncate">{child.title}</span>

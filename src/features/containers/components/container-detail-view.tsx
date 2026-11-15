@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Card, CardHeader, Detail, DetailGrid, EmptyState } from "@/components/ui/card";
 import { Page, PageHeader } from "@/components/ui/page";
-import { Table, Td, Th } from "@/components/ui/table";
+import { Cell, Table, Td, Th } from "@/components/ui/table";
 import { ContainerStatusBadge } from "@/features/containers/components/container-status-badge";
 import { ContainerProgress } from "@/features/containers/components/container-progress";
 import { ContainerScan } from "@/features/containers/components/container-scan";
@@ -98,15 +98,18 @@ export function ContainerDetailView({ container }: { container: ContainerDetail 
                 {container.orders.map((order) => (
                   <tr key={order.id}>
                     <Td>
-                      <Link
-                        href={`/orders/${order.id}`}
-                        className="font-medium hover:text-primary hover:underline"
+                      <Cell
+                        main={
+                          <Link
+                            href={`/orders/${order.id}`}
+                            className="hover:text-primary hover:underline"
+                          >
+                            {order.order_number}
+                          </Link>
+                        }
                       >
-                        {order.order_number}
-                      </Link>
-                      <div className="text-xs text-muted-foreground">
-                        {order.customer_name ?? "—"}
-                      </div>
+                        <span>{order.customer_name ?? "—"}</span>
+                      </Cell>
                     </Td>
                     <Td className="text-center">
                       <OrderStatusBadge status={order.status as OrderStatus} />

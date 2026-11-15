@@ -2,35 +2,29 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { AlertCircle } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { AlertCircle, Clock, Package, PackageCheck, Truck, type LucideIcon } from "lucide-react";
+import type { BadgeTone } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardHeader, EmptyState } from "@/components/ui/card";
 import { Input, Select } from "@/components/ui/form";
+import { OpenRow } from "@/components/ui/open-row";
 import { Page, PageHeader, Stat, StatGrid, Toolbar } from "@/components/ui/page";
-import { PAGE_SIZE, Pagination } from "@/components/ui/pagination";
-import { Cell, Table, Td, Th } from "@/components/ui/table";
+import { paginate, Pagination } from "@/components/ui/pagination";
+import { Cell, rowAccent, Table, Td, Th } from "@/components/ui/table";
 import { NewOrderDialog } from "@/features/orders/components/new-order-dialog";
 import { OrderStatusBadge } from "@/features/orders/components/order-status-badge";
-import { orderStatusMeta, orderStatuses } from "@/features/orders/status";
+import { DELIVERED, IN_PROGRESS, orderStatusMeta, orderStatuses } from "@/features/orders/status";
 import type { OrderFormOptions, OrderSummary } from "@/features/orders/types";
 import { formatDate, formatNumber, formatTime } from "@/lib/format";
 
-const IN_PROGRESS = new Set([
-  "APPROVED",
-  "PACKING",
-  "PACKED",
-  "DISPATCHED",
-  "IN_TRANSIT",
-  "ARRIVED",
-]);
+type Group = "" | "pending" | "progress" | "delivered";
 
-const DELIVERED = new Set([
-  "DELIVERED",
-  "CUSTOMER_CONFIRMED",
-  "RETURN_REQUESTED",
-  "RETURN_COLLECTED",
-  "RETURN_RECEIVED",
-  "CLOSED",
-]);
+const inGroup: Record<Exclude<Group, "">, (status: string) => boolean> = {
+  pending: (status) => status === "PENDING_OPS_APPROVAL",
+  progress: (status) => IN_PROGRESS.has(status),
+  delivered: (status) => DELIVERED.has(status),
+};
 
 export function OrdersTable({
   orders,
@@ -39,9 +33,11 @@ export function OrdersTable({
   orders: OrderSummary[];
   options: OrderFormOptions;
 }) {
+  const router = useRouter();
   const [search, setSearch] = useState("");
   const [customerId, setCustomerId] = useState("");
   const [status, setStatus] = useState("");
+  const [group, setGroup] = useState<Group>("");
   const [page, setPage] = useState(1);
 
   const filtered = useMemo(() => {
@@ -50,17 +46,35 @@ export function OrdersTable({
       (order) =>
         (!customerId || order.customerId === customerId) &&
         (!status || order.status === status) &&
+        (!group || inGroup[group](order.status)) &&
         (!term ||
           [order.orderNumber, order.customerName, order.destination, order.stationCode]
             .join(" ")
             .toLowerCase()
             .includes(term)),
     );
-  }, [orders, search, customerId, status]);
+  }, [orders, search, customerId, status, group]);
 
-  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const currentPage = Math.min(page, pageCount);
-  const rows = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const { rows, page: currentPage, pageCount } = paginate(filtered, page);
+  const hasFilters = Boolean(search || customerId || status || group);
+
+  const stat = (label: string, key: Group, icon: LucideIcon, tone: BadgeTone) => {
+    const count = key ? orders.filter((o) => inGroup[key](o.status)).length : orders.length;
+    return (
+      <Stat
+        label={label}
+        icon={icon}
+        tone={tone === "amber" && count === 0 ? "blue" : tone}
+        value={formatNumber(count)}
+        active={key !== "" && group === key}
+        onClick={() => {
+          setGroup(group === key ? "" : key);
+          setStatus("");
+          setPage(1);
+        }}
+      />
+    );
+  };
 
   return (
     <Page>
@@ -71,25 +85,16 @@ export function OrdersTable({
       />
 
       <StatGrid>
-        <Stat label="Total orders" value={formatNumber(orders.length)} />
-        <Stat
-          label="Pending approval"
-          value={formatNumber(orders.filter((o) => o.status === "PENDING_OPS_APPROVAL").length)}
-        />
-        <Stat
-          label="In progress"
-          value={formatNumber(orders.filter((o) => IN_PROGRESS.has(o.status)).length)}
-        />
-        <Stat
-          label="Delivered"
-          value={formatNumber(orders.filter((o) => DELIVERED.has(o.status)).length)}
-        />
+        {stat("Total orders", "", Package, "blue")}
+        {stat("Pending approval", "pending", Clock, "amber")}
+        {stat("In progress", "progress", Truck, "blue")}
+        {stat("Delivered", "delivered", PackageCheck, "green")}
       </StatGrid>
 
       <Card>
       <CardHeader
         title="All orders"
-        description={`${filtered.length} of ${orders.length} shown`}
+        description={`${filtered.length} of ${orders.length} shown · newest first`}
       />
 
       <Toolbar>
@@ -125,6 +130,7 @@ export function OrdersTable({
           value={status}
           onChange={(event) => {
             setStatus(event.target.value);
+            setGroup("");
             setPage(1);
           }}
         >
@@ -135,6 +141,20 @@ export function OrdersTable({
             </option>
           ))}
         </Select>
+        {hasFilters && (
+          <Button
+            variant="ghost"
+            onClick={() => {
+              setSearch("");
+              setCustomerId("");
+              setStatus("");
+              setGroup("");
+              setPage(1);
+            }}
+          >
+            Clear filters
+          </Button>
+        )}
       </Toolbar>
 
       {rows.length === 0 ? (
@@ -153,7 +173,11 @@ export function OrdersTable({
           </thead>
           <tbody>
             {rows.map((order) => (
-              <tr key={order.id} className="transition-colors hover:bg-accent/50">
+              <OpenRow
+                key={order.id}
+                onOpen={() => router.push(`/orders/${order.id}`)}
+                className={rowAccent(order.status === "DISPUTED" ? "red" : null)}
+              >
                 <Td>
                   <Cell
                     main={
@@ -184,18 +208,18 @@ export function OrdersTable({
                   <OrderStatusBadge status={order.status} />
                 </Td>
                 <Td className="text-center">
-                  <Cell main={formatNumber(order.totalQuantity)} className="justify-items-center">
+                  <Cell main={formatNumber(order.totalQuantity)} center>
                     <span>
                       {order.itemCount} {order.itemCount === 1 ? "product" : "products"}
                     </span>
                   </Cell>
                 </Td>
                 <Td className="text-center">
-                  <Cell main={formatDate(order.expectedDeliveryAt)} className="justify-items-center">
+                  <Cell main={formatDate(order.expectedDeliveryAt)} center>
                     {order.expectedDeliveryAt && <span>{formatTime(order.expectedDeliveryAt)}</span>}
                   </Cell>
                 </Td>
-              </tr>
+              </OpenRow>
             ))}
           </tbody>
         </Table>

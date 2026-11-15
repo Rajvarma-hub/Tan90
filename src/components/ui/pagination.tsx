@@ -3,7 +3,18 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-export const PAGE_SIZE = 10;
+const PAGE_SIZE = 10;
+
+// Slices a list to one page, clamping the page when a filter has shrunk the list.
+export function paginate<T>(items: T[], page: number) {
+  const pageCount = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
+  const current = Math.min(page, pageCount);
+  return {
+    page: current,
+    pageCount,
+    rows: items.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE),
+  };
+}
 
 export function Pagination({
   page,

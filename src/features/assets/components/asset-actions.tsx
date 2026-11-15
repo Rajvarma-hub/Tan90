@@ -57,6 +57,7 @@ function EditDialog({ asset, types, stations }: Props) {
       <Button
         variant="outline"
         size="sm"
+        className="w-24"
         onClick={() => {
           clearError();
           setNewEpc("");
@@ -173,6 +174,7 @@ function UnregisterDialog({ asset }: { asset: Asset }) {
       <Button
         variant="danger"
         size="sm"
+        className="w-24"
         disabled={!allowed}
         title={allowed ? undefined : "On an order. Unregister it once it is back in stock."}
         onClick={() => {
@@ -229,6 +231,7 @@ function RestoreDialog({ asset, stations }: Pick<Props, "asset" | "stations">) {
       <Button
         variant="outline"
         size="sm"
+        className="w-24"
         onClick={() => {
           clearError();
           setEpc("");
@@ -282,7 +285,7 @@ export function AssetActions({ asset, types, stations }: Props) {
     return <RestoreDialog asset={asset} stations={stations} />;
   }
   return (
-    <div className="flex items-center justify-end gap-1">
+    <div className="flex items-center justify-center gap-2">
       <EditDialog asset={asset} types={types} stations={stations} />
       <UnregisterDialog asset={asset} />
     </div>

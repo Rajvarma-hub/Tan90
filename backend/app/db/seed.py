@@ -1305,7 +1305,9 @@ def seed() -> None:
         seed_exceptions(db)
         seed_notifications(db)
         db.commit()
-        print("Seed complete: 27 users, 63 containers, 20 orders "
+        print(f"Seed complete: {db.query(User).count()} users, "
+              f"{db.query(Container).count()} containers, "
+              f"{db.query(Order).count()} orders "
               "(every order and container state populated).")
     finally:
         db.close()

@@ -5,6 +5,9 @@ import sys
 import time
 import requests
 
+# Windows consoles default to cp1252, which cannot print the section rules.
+sys.stdout.reconfigure(encoding="utf-8")
+
 BASE = os.environ.get("API_URL", "http://127.0.0.1:8001")
 PASSWORD = "password123"
 

@@ -3,11 +3,11 @@ import type { BadgeTone } from "@/components/ui/badge";
 export type Health = "healthy" | "inspection" | "damaged" | "quarantined" | "missing" | "retired";
 
 export const healthMeta: Record<Health, { label: string; tone: BadgeTone; bar: string }> = {
-  healthy: { label: "Healthy", tone: "green", bar: "bg-emerald-500" },
+  healthy: { label: "Healthy", tone: "green", bar: "bg-emerald-600" },
   inspection: { label: "Under inspection", tone: "amber", bar: "bg-amber-500" },
   damaged: { label: "Damaged", tone: "red", bar: "bg-red-500" },
-  quarantined: { label: "Quarantined", tone: "orange", bar: "bg-orange-500" },
-  missing: { label: "Missing", tone: "purple", bar: "bg-purple-500" },
+  quarantined: { label: "Quarantined", tone: "amber", bar: "bg-amber-700" },
+  missing: { label: "Missing", tone: "red", bar: "bg-red-800" },
   retired: { label: "Unregistered", tone: "gray", bar: "bg-zinc-600" },
 };
 

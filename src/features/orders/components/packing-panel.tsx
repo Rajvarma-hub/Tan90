@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader, EmptyState } from "@/components/ui/card";
 import { FormError, Input } from "@/components/ui/form";
 import { ScanInput } from "@/components/ui/scan-input";
-import { Table, Td, Th } from "@/components/ui/table";
+import { Cell, Table, Td, Th } from "@/components/ui/table";
 import { runOrderAction, scanIntoPacking } from "@/features/orders/actions";
 import type { OrderActionOptions, OrderDetail } from "@/features/orders/types";
 import { useServerAction } from "@/hooks/use-server-action";
@@ -150,22 +150,25 @@ export function PackingPanel({
                     {item.sku}
                   </Th>
                 ))}
-                <Th />
+                <Th className="text-center">Action</Th>
               </tr>
             </thead>
             <tbody>
               {order.containers.map((container) => (
                 <tr key={container.container_id}>
                   <Td>
-                    <Link
-                      href={`/assets/${container.container_id}`}
-                      className="font-medium hover:text-primary hover:underline"
+                    <Cell
+                      main={
+                        <Link
+                          href={`/assets/${container.container_id}`}
+                          className="hover:text-primary hover:underline"
+                        >
+                          {container.container_code}
+                        </Link>
+                      }
                     >
-                      {container.container_code}
-                    </Link>
-                    <div className="text-xs text-muted-foreground">
-                      {container.container_type}
-                    </div>
+                      <span>{container.container_type}</span>
+                    </Cell>
                   </Td>
                   {items.map((item) => (
                     <Td key={item.sku} className="text-center">
@@ -189,7 +192,7 @@ export function PackingPanel({
                       />
                     </Td>
                   ))}
-                  <Td className="text-right">
+                  <Td className="text-center">
                     <Button
                       variant="ghost"
                       size="icon"

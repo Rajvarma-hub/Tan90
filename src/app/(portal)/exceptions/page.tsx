@@ -1,13 +1,13 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
-import { ExceptionList } from "@/features/exceptions/components/exception-list";
+import { ExceptionsTable } from "@/features/exceptions/components/exceptions-table";
 import { getExceptions } from "@/features/exceptions/queries";
 
 export const metadata: Metadata = { title: "Exceptions" };
 
 async function Exceptions() {
-  return <ExceptionList exceptions={await getExceptions()} />;
+  return <ExceptionsTable exceptions={await getExceptions()} />;
 }
 
 export default function ExceptionsPage() {

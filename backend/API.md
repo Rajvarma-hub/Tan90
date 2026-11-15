@@ -3,6 +3,8 @@
 Base URL: `http://localhost:8001` (the port you start uvicorn on)
 Swagger UI: `http://localhost:8001/docs`
 
+This guide covers all 70 routes. Sections 1 to 52 are the core order flow; sections 53 to 70 are the lookups and asset tools the portal uses. Swagger is generated from the code, so it is always the final word.
+
 Every endpoint follows the same template:
 - **What** — one-line description
 - **Roles** — which logged-in roles can call it
@@ -53,7 +55,7 @@ export type OrderStatus =
 export type ContainerStatus =
   | 'AVAILABLE' | 'PACKING' | 'PACKED' | 'IN_TRANSIT_TO_CUSTOMER'
   | 'WITH_CUSTOMER' | 'RETURN_REQUESTED' | 'IN_TRANSIT_TO_STATION'
-  | 'UNDER_INSPECTION' | 'DAMAGED' | 'QUARANTINED' | 'MISSING';
+  | 'UNDER_INSPECTION' | 'DAMAGED' | 'QUARANTINED' | 'MISSING' | 'RETIRED';
 
 export interface User {
   id: string; email: string; full_name: string; role: Role;
@@ -78,9 +80,16 @@ export interface ContainerType {
 export interface Container {
   id: string; container_code: string; container_type: string;
   capacity_litres: number; status: ContainerStatus;
+  created_at: string | null;
   current_location_id: string | null;
   current_customer_id: string | null;
   epc: string | null;
+  // Resolved names, so a list needs no extra lookups
+  location_code: string | null; location_name: string | null;
+  customer_name: string | null;
+  // The order it is packed for or out on; null for free stock
+  current_order: { id: string; order_number: string; status: OrderStatus;
+                   customer_name: string | null } | null;
 }
 
 export interface OrderItem {
@@ -490,11 +499,13 @@ Packer scans EPC → picks type → backend generates code, derives capacity, li
 ## 17. `GET /api/containers` — List containers
 
 **Roles** — any authenticated
-**Request** — `?status=`, `?location_id=`, `?type_code=` (all optional)
-**Response 200** — `Container[]`
+**Request** — `?status=`, `?location_id=`, `?type_code=`, `?include_retired=true` (all optional)
+**Response 200** — `Container[]`, ordered by container code
 **Errors**
 - `400` bad `type_code`
 - `401`
+
+Unregistered (`RETIRED`) containers are left out unless you pass `?include_retired=true` or `?status=RETIRED`.
 
 FSM/Packer/Warehouse see only their own location unless `?location_id=` is given.
 
@@ -1082,8 +1093,8 @@ Records EPCs seen at handover; matched vs unknown.
       "count": 2
     }
   ],
-  "total_containers": 60,
-  "total_orders": 15
+  "total_containers": 63,
+  "total_orders": 20
 }
 ```
 **Errors** — `403`
@@ -1139,7 +1150,7 @@ Orders at `PENDING_OPS_APPROVAL`.
 ## 50. `GET /api/exceptions` — Operational exceptions
 
 **Roles** — `SUPER_ADMIN`, `OPERATIONS_ADMIN`, `FREEZING_STATION_MANAGER`, `SUPPLY_CHAIN_MANAGER`
-**Request** — `?status=OPEN`, `?kind=UNKNOWN_EPC` (both optional)
+**Request** — `?status=` (default `OPEN`; send it empty, `?status=`, to get open and resolved together), `?kind=UNKNOWN_EPC` (optional)
 **Response 200**
 ```json
 [
@@ -1182,6 +1193,384 @@ Orders at `PENDING_OPS_APPROVAL`.
 ```json
 { "status": "ok", "version": "0.1.0" }
 ```
+
+---
+
+# DIRECTORY (2 endpoints)
+
+Read-only lookups the portal uses to turn IDs into names.
+
+## 53. `GET /api/customers` — List customers
+
+**Roles** — `SUPER_ADMIN`, `OPERATIONS_ADMIN`, `FREEZING_STATION_MANAGER`, `WAREHOUSE`, `PACKING_WORKER`, `SUPPLY_CHAIN_MANAGER`
+**Request** — no body
+**Response 200** — sorted by name
+```json
+[
+  { "id": "cust-hyperpure", "name": "Zomato Hyperpure",
+    "contact_email": "ops@hyperpure.example", "contact_phone": "+91 98450 00001",
+    "address": "Whitefield, Bangalore" }
+]
+```
+**Errors** — `403` wrong role
+
+---
+
+## 54. `GET /api/users` — List active users
+
+**Roles** — same as #53
+**Request** — `?role=DRIVER` (optional, one of the `Role` values)
+**Response 200** — active users only, sorted by name
+```json
+[
+  { "id": "usr-driver1", "full_name": "Vikram (BLR)", "email": "driver1@tan90.local",
+    "role": "DRIVER", "location_id": null, "customer_id": null }
+]
+```
+**Errors** — `403` wrong role
+
+---
+
+# CONTAINER TOOLS (6 endpoints)
+
+## 55. `GET /api/containers/summary` — Counts by status
+
+**Roles** — any authenticated except `CUSTOMER`
+**Request** — no body
+**Response 200**
+```json
+{ "total": 62, "by_status": { "AVAILABLE": 32, "WITH_CUSTOMER": 5, "RETIRED": 1 } }
+```
+`total` excludes `RETIRED` containers; `by_status` includes them.
+**Errors** — `403` customer
+
+---
+
+## 56. `GET /api/containers/lookup` — Resolve a scan
+
+Turns whatever a scanner typed into a container. Accepts the RFID tag ID or the container code printed on the barcode label.
+
+**Roles** — any authenticated except `CUSTOMER`
+**Request** — `?code=E280A1000000000000000016` or `?code=CON-000016` (required)
+**Response 200** — `Container`
+**Errors**
+- `403` customer
+- `404` nothing matches the code
+
+---
+
+## 57. `GET /api/containers/{id}/detail` — Container page
+
+Everything the container page needs in one call: the container, every order it has been on, and its movement log with names resolved.
+
+**Roles** — any authenticated except `CUSTOMER`
+**Request** — no body
+**Response 200** — `Container` plus
+```json
+{
+  "created_at": "2026-11-03T09:00:00.000Z",
+  "orders": [
+    { "id": "ord-5", "order_number": "ORD-0005", "status": "DISPATCHED",
+      "customer_name": "Zomato Hyperpure", "created_at": "2026-11-07T09:00:00.000Z" }
+  ],
+  "history": [
+    { "id": "mov-abc", "from_status": "PACKED", "to_status": "IN_TRANSIT_TO_CUSTOMER",
+      "reason": "DISPATCHED", "from_location": "FS-BLR", "to_location": null,
+      "order_id": "ord-5", "order_number": "ORD-0005",
+      "actor_name": "Packer A (FS-BLR)", "occurred_at": "2026-11-08T07:30:00.000Z" }
+  ]
+}
+```
+`history` is newest first.
+**Errors** — `403` customer, `404`
+
+---
+
+## 58. `PATCH /api/containers/{id}` — Correct type or location
+
+Only while the container is free stock. Omitted fields stay as they are.
+
+**Roles** — `SUPER_ADMIN`, `OPERATIONS_ADMIN`, `FREEZING_STATION_MANAGER` (own station)
+**Request**
+```json
+{ "container_type_code": "SHIP-40", "location_id": "loc-fs-chn" }
+```
+**Response 200** — updated `Container`
+**Errors**
+- `400` unknown `container_type_code`
+- `403` wrong role, or a container at another station
+- `404` container or location not found
+- `409` status is not `AVAILABLE`, `DAMAGED`, `QUARANTINED` or `MISSING`
+
+**Side effects** — a location change writes a `RELOCATED` movement; every change writes an audit entry
+
+---
+
+## 59. `POST /api/containers/{id}/unregister` — Take out of circulation
+
+The tag stops working and the container leaves all counts. It stays in the registry as `RETIRED` and can be restored.
+
+**Roles** — same as #58
+**Request**
+```json
+{ "reason": "Beyond repair" }
+```
+`reason` is optional, up to 200 characters.
+**Response 200** — `Container` with `status: "RETIRED"`
+**Errors**
+- `403`
+- `404`
+- `409` the container is on an order
+
+---
+
+## 60. `POST /api/containers/{id}/restore` — Bring back into stock
+
+**Roles** — same as #58
+**Request**
+```json
+{ "epc": "E280A1999999999999999998", "location_id": "loc-fs-blr" }
+```
+`location_id` is optional; the container keeps its location if omitted.
+**Response 200** — `Container` with `status: "AVAILABLE"` and the new tag
+**Errors**
+- `403`
+- `404` container or location not found
+- `409` the container is not `RETIRED`; the EPC is already linked to another container
+- `422` EPC < 4 chars
+
+---
+
+# ORDER TOOLS (3 endpoints)
+
+## 61. `GET /api/orders/{id}/detail` — Order page
+
+Everything the order page needs in one call, with names resolved.
+
+**Roles** — any authenticated (a customer only sees their own orders)
+**Request** — no body
+**Response 200**
+```json
+{
+  "id": "ord-5", "order_number": "ORD-0005", "status": "DISPATCHED",
+  "destination": "Hyperpure DC, Whitefield",
+  "expected_delivery_at": "2026-11-12T10:00:00Z", "created_at": "2026-11-07T09:00:00Z",
+  "customer": { "id": "cust-hyperpure", "name": "Zomato Hyperpure",
+                "contact_email": "...", "contact_phone": "...", "address": "..." },
+  "station": { "id": "loc-fs-blr", "code": "FS-BLR", "name": "Freezing Station Bangalore",
+               "address": "..." },
+  "items": [ { "id": "oi-1", "product_id": "prd-pcm-pos5", "quantity": 6,
+               "sku": "PCM-POS5", "product_name": "PCM Panel +5 C", "setpoint_c": 5.0 } ],
+  "packing_session": { "id": "ps-xyz", "status": "COMPLETED" },
+  "containers": [ { "container_id": "con-000002", "container_code": "CON-000002",
+                    "container_type": "20L Shipper Box", "status": "IN_TRANSIT_TO_CUSTOMER",
+                    "epc": "E280A1000000000000000002",
+                    "contents": [ { "sku": "PCM-POS5", "qty": 6 } ] } ],
+  "driver": { "id": "usr-driver1", "full_name": "...", "email": "..." },
+  "vehicle_ref": "KA-01-AB-1234",
+  "return_driver": null,
+  "history": [ { "id": "oev-1", "action": "create", "from": "—", "to": "PENDING_OPS_APPROVAL",
+                 "actor_name": "Ops", "notes": null, "occurred_at": "2026-11-07T09:00:00Z" } ]
+}
+```
+`customer`, `station`, `packing_session`, `driver` and `return_driver` are `null` when not set yet.
+**Errors** — `403` a customer reading another customer's order, `404`
+
+---
+
+## 62. `POST /api/orders/{id}/cancel` — Cancel an order
+
+Allowed only before packing starts, so no containers or stock are involved.
+
+**Roles** — `SUPER_ADMIN`, `OPERATIONS_ADMIN`
+**Request** — no body
+**Response 200** — `Order` with `status: "CANCELLED"`
+**Errors**
+- `403` wrong role
+- `404`
+- `409` status is not `PENDING_OPS_APPROVAL` or `APPROVED`
+
+---
+
+## 63. `DELETE /api/packing-sessions/{sid}/items/{cid}` — Undo a scan
+
+Takes a container out of an open packing session and frees it again.
+
+**Roles** — same as #28
+**Request** — no body
+**Response 200**
+```json
+{ "container_id": "con-000001", "removed": true }
+```
+**Errors**
+- `403`
+- `404` the container is not in this session
+- `409` session missing or not `OPEN`
+
+**Side effects** — container `PACKING` → `AVAILABLE` with a `PACKING_REMOVED` movement
+
+---
+
+# INVENTORY (3 endpoints)
+
+Freezing station managers, packers and warehouse staff only ever see their own location.
+
+## 64. `GET /api/inventory` — Stock balances
+
+**Roles** — any authenticated except `CUSTOMER`
+**Request** — `?location_id=`, `?product_id=` (optional)
+**Response 200** — one row per product per location, sorted by location code then SKU
+```json
+[
+  { "id": "bal-1", "quantity": 120,
+    "product_id": "prd-pcm-neg24", "sku": "PCM-NEG24", "product_name": "PCM Panel -24 C",
+    "setpoint_c": -24.0, "unit": "panel",
+    "location_id": "loc-fs-blr", "location_code": "FS-BLR",
+    "location_name": "Freezing Station Bangalore", "location_kind": "FREEZING_STATION" }
+]
+```
+**Errors** — `403` customer
+
+---
+
+## 65. `GET /api/inventory/movements` — Stock movement log
+
+Newest first.
+
+**Roles** — any authenticated except `CUSTOMER`
+**Request** — `?location_id=`, `?product_id=`, `?direction=INWARD|OUTWARD`, `?limit=200` (1–1000)
+**Response 200**
+```json
+[
+  { "id": "imv-1", "delta": -6, "direction": "OUTWARD", "quantity": 6,
+    "reason": "SALES", "reference_type": "ORDER", "reference_id": "ord-5",
+    "product_id": "prd-pcm-pos5", "sku": "PCM-POS5", "product_name": "PCM Panel +5 C",
+    "location_id": "loc-fs-blr", "location_code": "FS-BLR",
+    "actor_id": "usr-packer1", "actor_name": "Packer A (FS-BLR)",
+    "occurred_at": "2026-11-08T07:30:00.000Z" }
+]
+```
+**Errors** — `403` customer; `422` bad `direction` or `limit`
+
+---
+
+## 66. `POST /api/inventory/movements` — Record a stock movement
+
+Receive new stock, write off damage, adjust, or transfer between locations. Stock changes immediately. Sales movements are not made here; dispatching an order writes them.
+
+**Roles** — `SUPER_ADMIN`, `OPERATIONS_ADMIN`, `FREEZING_STATION_MANAGER`, `WAREHOUSE` (own location only for the last two)
+**Request**
+```json
+{
+  "product_id": "prd-pcm-neg24",
+  "location_id": "loc-fs-blr",
+  "direction": "INWARD",
+  "reason": "NEW_INVENTORY",
+  "quantity": 50,
+  "to_location_id": null,
+  "reference": "Challan 1042"
+}
+```
+`reason` is `NEW_INVENTORY`, `INTERNAL_TRANSFER`, `DAMAGED` or `ADJUSTMENT`. A transfer needs `to_location_id` and writes an outward movement at `location_id` and an inward one at the destination. `NEW_INVENTORY` must be `INWARD`, `DAMAGED` must be `OUTWARD`. `quantity` is 1 to 1,000,000.
+**Response 201**
+```json
+{ "ok": true }
+```
+**Errors**
+- `400` transfer without a different destination; wrong direction for the reason
+- `403` a location that is not yours
+- `404` product or location not found
+- `409` not enough stock at the location
+- `422` bad quantity or reason
+
+---
+
+# DISPATCHES (4 endpoints)
+
+A lower-level view of what #32 does in one step. The portal uses #32; these are for integrations that manage the dispatch record themselves.
+
+## 67. `POST /api/dispatches` — Create a dispatch
+
+**Roles** — `SUPER_ADMIN`, `OPERATIONS_ADMIN`, `FREEZING_STATION_MANAGER`
+**Request**
+```json
+{ "order_id": "ord-4", "packing_session_id": "ps-xyz",
+  "driver_id": "usr-driver1", "vehicle_ref": "KA-01-AB-1234" }
+```
+`driver_id` and `vehicle_ref` are optional. A delivery task is created when a driver is given.
+**Response 200**
+```json
+{ "id": "dsp-abc", "status": "PENDING", "order_id": "ord-4", "task_id": "task-xyz" }
+```
+**Errors**
+- `400` the packing session does not belong to the order
+- `403`
+- `404` order not found
+- `409` the packing session is not `COMPLETED`
+
+---
+
+## 68. `GET /api/dispatches/{id}` — One dispatch
+
+**Roles** — any authenticated
+**Request** — no body
+**Response 200**
+```json
+{
+  "id": "dsp-abc", "order_id": "ord-4", "status": "PENDING",
+  "driver_id": "usr-driver1", "vehicle_ref": "KA-01-AB-1234", "task_id": "task-xyz",
+  "containers": [ { "container_id": "con-000021", "container_code": "CON-000021",
+                    "epc": "E280A1000000000000000021", "status": "PACKED" } ]
+}
+```
+**Errors** — `404`
+
+---
+
+## 69. `POST /api/dispatches/{id}/verify` — Check scans against the manifest
+
+The driver scans the containers; the response says which match. Nothing is changed.
+
+**Roles** — `DRIVER`, `OPERATIONS_ADMIN`, `SUPER_ADMIN`
+**Request**
+```json
+{ "epcs": ["E280A1000000000000000021", "E280A1000000000000000022"] }
+```
+**Response 200**
+```json
+{
+  "dispatch_id": "dsp-abc",
+  "matched": [ { "epc": "E280A1000000000000000021", "container_id": "con-000021" } ],
+  "missing_container_ids": [],
+  "unexpected": [],
+  "unknown_epcs": [],
+  "expected_count": 2,
+  "scanned_count": 2
+}
+```
+**Errors** — `403`, `404`, `422` empty `epcs`
+
+---
+
+## 70. `POST /api/dispatches/{id}/status` — Confirm or cancel
+
+**Roles** — `SUPER_ADMIN`, `OPERATIONS_ADMIN`, `FREEZING_STATION_MANAGER`
+**Request**
+```json
+{ "status": "DISPATCHED" }
+```
+`status` is `DISPATCHED` or `CANCELLED`.
+**Response 200**
+```json
+{ "id": "dsp-abc", "status": "DISPATCHED" }
+```
+**Errors**
+- `400` unknown status; no containers on the dispatch
+- `403`
+- `404`
+- `409` the dispatch is not `PENDING`, or a container cannot make the move
+
+**Side effects** — `DISPATCHED` moves every container to `IN_TRANSIT_TO_CUSTOMER` and the order to `DISPATCHED`
 
 ---
 
@@ -1244,13 +1633,18 @@ Any illegal transition returns `409` with `{"detail": "Cannot perform 'action' f
 | Customer: My containers | #19 |
 | Customer: Request return | #38 |
 | FSM: Inbound returns | #46, #41, #42 |
-| Containers list | #17 |
-| Container detail | #18, #20 |
+| Containers list | #17, #55 |
+| Container detail | #18, #20, #57 |
+| Container scan box | #56 |
 | Container tag replacement | #21 |
+| Asset registry: register, edit, unregister, restore | #15, #16, #58, #59, #60 |
 | Admin: Overview | #47 |
 | Products | #11, #12, #13, #14 |
-| Stations | #6, #7, #8, #9 |
+| Stations / Locations | #6, #7, #8, #9, #53, #64 |
+| Inventory: stock and movements | #64, #65, #66 |
+| Order page and actions | #61, #62, #63 |
 | Exceptions | #50, #51 |
+| Portal name lookups | #53, #54 |
 
 ---
 
@@ -1271,12 +1665,14 @@ Any illegal transition returns `409` with `{"detail": "Cannot perform 'action' f
 **Data at startup:**
 - 6 locations (4 FS + 2 WH)
 - 6 customers
-- 21 users (2–3 per role)
-- 8 PCM products
-- 60 containers + 60 RFID tags
-- 15 orders across every lifecycle state (1 pending, 1 approved, 1 packing, 1 packed, 1 dispatched, 1 in-transit, 1 arrived, 1 delivered, 1 confirmed, 1 disputed, 1 return-requested, 1 return-collected, 1 return-received, 1 closed, 1 damaged-return)
-- 32 inventory balances
-- 1 open exception
+- 26 users (2 super admins, 2 ops, 4 FSM, 2 warehouse, 5 packers, 4 drivers, 6 customers, 1 supply chain)
+- 11 PCM products
+- 63 containers and 63 RFID tags (61 active), covering every container state
+- 20 orders across every lifecycle state, including 2 disputed and 2 cancelled
+- 39 inventory balances (3,012 units) and 72 stock movements
+- 8 exceptions (5 open, 3 resolved)
+
+The full list is in [guide.txt](guide.txt).
 
 ---
 

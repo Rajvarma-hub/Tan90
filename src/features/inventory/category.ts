@@ -7,6 +7,6 @@ export function categoryOf(setpoint: number | null): {
 } {
   if (setpoint === null) return { label: "Miscellaneous", tone: "gray" };
   if (setpoint <= -15) return { label: "Frozen", tone: "blue" };
-  if (setpoint <= 8) return { label: "Chiller", tone: "cyan" };
-  return { label: "Ambient", tone: "amber" };
+  if (setpoint <= 8) return { label: "Chiller", tone: "gray" };
+  return { label: "Ambient", tone: "gray" };
 }

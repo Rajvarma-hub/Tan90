@@ -4,20 +4,24 @@ import Link from "next/link";
 import {
   ArrowLeftRight,
   ArrowRight,
+  Box,
+  Layers,
   PackageSearch,
   Snowflake,
+  Warehouse,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { buttonClass } from "@/components/ui/button";
 import { Card, CardHeader, EmptyState, ItemCard, ItemGrid } from "@/components/ui/card";
 import { Page, PageHeader, Stat, StatGrid } from "@/components/ui/page";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
+import { BadgeCell, Cell, Table, Td, Th } from "@/components/ui/table";
 import {
   getMovements,
   getProducts,
   getStationSummaries,
 } from "@/features/inventory/queries";
-import { formatDateTime, formatNumber, humanize } from "@/lib/format";
+import { formatDate, formatNumber, formatTime, humanize } from "@/lib/format";
 
 export const metadata: Metadata = { title: "Inventory" };
 
@@ -86,10 +90,10 @@ async function Overview() {
       />
 
       <StatGrid>
-        <Stat label="Products" value={formatNumber(products.length)} />
-        <Stat label="Units in stock" value={formatNumber(unitsInStock)} />
-        <Stat label="Locations" value={formatNumber(stations.length)} />
-        <Stat label="Containers free" value={formatNumber(containersFree)} />
+        <Stat label="Products" icon={PackageSearch} value={formatNumber(products.length)} href="/inventory/assets" />
+        <Stat label="Units in stock" icon={Layers} value={formatNumber(unitsInStock)} href="/inventory/assets" />
+        <Stat label="Locations" icon={Warehouse} value={formatNumber(stations.length)} href="/inventory/stations" />
+        <Stat label="Containers free" icon={Box} tone="green" value={formatNumber(containersFree)} href="/inventory/stations" />
       </StatGrid>
 
       <ItemGrid>
@@ -114,26 +118,60 @@ async function Overview() {
         {recent.length === 0 ? (
           <EmptyState>No stock movements yet.</EmptyState>
         ) : (
-          <ul className="divide-y divide-border/60 rounded-lg border border-border/60">
-            {recent.map((m) => (
-              <li
-                key={m.id}
-                className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-3.5"
-              >
-                <div className="flex min-w-0 items-center gap-3">
-                  <Badge tone={m.direction === "INWARD" ? "green" : "orange"}>
-                    {m.direction === "INWARD" ? "Inward" : "Outward"}
-                  </Badge>
-                  <span className="truncate text-sm text-card-foreground">
-                    {formatNumber(m.quantity)} × {m.product_name}
-                  </span>
-                </div>
-                <span className="text-xs text-muted-foreground">
-                  {m.location_code} · {humanize(m.reason)} · {formatDateTime(m.occurred_at)}
-                </span>
-              </li>
-            ))}
-          </ul>
+          <Table>
+            <thead>
+              <tr>
+                <Th>When</Th>
+                <Th>Product</Th>
+                <Th className="text-center">Movement</Th>
+                <Th className="text-center">Quantity</Th>
+                <Th>Location</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {recent.map((m) => {
+                const inward = m.direction === "INWARD";
+                return (
+                  <tr key={m.id}>
+                    <Td>
+                      <Cell main={formatDate(m.occurred_at)}>
+                        <span>{formatTime(m.occurred_at)}</span>
+                      </Cell>
+                    </Td>
+                    <Td>
+                      <Cell main={m.product_name}>
+                        <span className="font-mono">{m.sku}</span>
+                      </Cell>
+                    </Td>
+                    <Td className="text-center">
+                      <BadgeCell
+                        badge={<Badge tone={inward ? "green" : "blue"}>{inward ? "Inward" : "Outward"}</Badge>}
+                        note={humanize(m.reason)}
+                      />
+                    </Td>
+                    <Td className="text-center">
+                      <Cell
+                        main={
+                          <span>
+                            {inward ? "+" : "−"}
+                            {formatNumber(m.quantity)}
+                          </span>
+                        }
+                        center
+                      >
+                        <span>units</span>
+                      </Cell>
+                    </Td>
+                    <Td>
+                      <Cell main={m.location_code}>
+                        {m.actor_name && <span>{m.actor_name}</span>}
+                      </Cell>
+                    </Td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </Table>
         )}
       </Card>
     </Page>

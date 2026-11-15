@@ -7,22 +7,41 @@ export const orderStatusMeta: Record<
 > = {
   PENDING_OPS_APPROVAL: { label: "Pending approval", tone: "amber" },
   APPROVED: { label: "Approved", tone: "blue" },
-  PACKING: { label: "Packing", tone: "cyan" },
-  PACKED: { label: "Packed", tone: "cyan" },
-  DISPATCHED: { label: "Dispatched", tone: "purple" },
-  IN_TRANSIT: { label: "In transit", tone: "purple" },
-  ARRIVED: { label: "Arrived", tone: "purple" },
+  PACKING: { label: "Packing", tone: "blue" },
+  PACKED: { label: "Packed", tone: "blue" },
+  DISPATCHED: { label: "Dispatched", tone: "blue" },
+  IN_TRANSIT: { label: "In transit", tone: "blue" },
+  ARRIVED: { label: "Arrived", tone: "blue" },
   DELIVERED: { label: "Delivered", tone: "green" },
   CUSTOMER_CONFIRMED: { label: "Confirmed", tone: "green" },
   DISPUTED: { label: "Disputed", tone: "red" },
   CANCELLED: { label: "Cancelled", tone: "gray" },
-  RETURN_REQUESTED: { label: "Return requested", tone: "orange" },
-  RETURN_COLLECTED: { label: "Return collected", tone: "orange" },
-  RETURN_RECEIVED: { label: "Return received", tone: "orange" },
+  RETURN_REQUESTED: { label: "Return requested", tone: "amber" },
+  RETURN_COLLECTED: { label: "Return collected", tone: "blue" },
+  RETURN_RECEIVED: { label: "Return received", tone: "blue" },
   CLOSED: { label: "Closed", tone: "gray" },
 };
 
 export const orderStatuses = Object.keys(orderStatusMeta) as OrderStatus[];
+
+// The groups behind the stat cards on Orders and the Overview.
+export const IN_PROGRESS = new Set<string>([
+  "APPROVED",
+  "PACKING",
+  "PACKED",
+  "DISPATCHED",
+  "IN_TRANSIT",
+  "ARRIVED",
+]);
+
+export const DELIVERED = new Set<string>([
+  "DELIVERED",
+  "CUSTOMER_CONFIRMED",
+  "RETURN_REQUESTED",
+  "RETURN_COLLECTED",
+  "RETURN_RECEIVED",
+  "CLOSED",
+]);
 
 // Milestones for the progress strip, and how far each status has got.
 export const orderMilestones = [

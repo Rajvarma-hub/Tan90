@@ -1,14 +1,16 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Plus } from "lucide-react";
+import { Layers, MapPin, PackageSearch, PackageX, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, EmptyState } from "@/components/ui/card";
 import { Dialog, DialogActions } from "@/components/ui/dialog";
 import { Field, FormError, Input, Select } from "@/components/ui/form";
+import { OpenRow } from "@/components/ui/open-row";
 import { Page, PageHeader, Stat, StatGrid, Toolbar } from "@/components/ui/page";
-import { Table, Td, Th } from "@/components/ui/table";
+import { paginate, Pagination } from "@/components/ui/pagination";
+import { Cell, Table, Td, Th } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
 import { createProduct } from "@/features/inventory/actions";
 import { categoryOf } from "@/features/inventory/category";
@@ -102,6 +104,7 @@ export function AssetInventory({
   const [search, setSearch] = useState("");
   const [productId, setProductId] = useState("");
   const [locationId, setLocationId] = useState("");
+  const [page, setPage] = useState(1);
 
   const assets = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -138,6 +141,8 @@ export function AssetInventory({
       (!productId || b.product_id === productId) &&
       (!locationId || b.location_id === locationId),
   );
+  const productPage = paginate(assets, page);
+  const stockPage = paginate(stockRows, page);
 
   const stockByProduct = new Map<string, number>();
   for (const b of balances) {
@@ -155,10 +160,15 @@ export function AssetInventory({
       />
 
       <StatGrid>
-        <Stat label="Products" value={formatNumber(products.length)} />
-        <Stat label="Units in stock" value={formatNumber(unitsInStock)} />
-        <Stat label="Locations stocked" value={formatNumber(locations.length)} />
-        <Stat label="Out of stock" value={formatNumber(outOfStock)} />
+        <Stat label="Products" icon={PackageSearch} value={formatNumber(products.length)} />
+        <Stat label="Units in stock" icon={Layers} value={formatNumber(unitsInStock)} />
+        <Stat label="Locations stocked" icon={MapPin} value={formatNumber(locations.length)} />
+        <Stat
+          label="Out of stock"
+          icon={PackageX}
+          tone={outOfStock ? "red" : "green"}
+          value={formatNumber(outOfStock)}
+        />
       </StatGrid>
 
       <Card>
@@ -167,12 +177,15 @@ export function AssetInventory({
           description={
             tab === "assets"
               ? `${assets.length} of ${products.length} shown`
-              : `${stockRows.length} of ${balances.length} shown`
+              : `${stockRows.length} of ${balances.length} shown · by location`
           }
           actions={
             <Tabs
               value={tab}
-              onChange={setTab}
+              onChange={(next) => {
+                setTab(next);
+                setPage(1);
+              }}
               options={[
                 { value: "assets", label: "Products" },
                 { value: "inventory", label: "Stock" },
@@ -189,7 +202,10 @@ export function AssetInventory({
                 className="min-w-56 flex-1"
                 placeholder="Search name, SKU, category…"
                 value={search}
-                onChange={(event) => setSearch(event.target.value)}
+                onChange={(event) => {
+                  setSearch(event.target.value);
+                  setPage(1);
+                }}
               />
             </Toolbar>
             {assets.length === 0 ? (
@@ -206,43 +222,43 @@ export function AssetInventory({
                   </tr>
                 </thead>
                 <tbody>
-                  {assets.map((asset) => {
+                  {productPage.rows.map((asset) => {
                     const showStock = () => {
                       setProductId(asset.id);
                       setLocationId("");
+                      setPage(1);
                       setTab("inventory");
                     };
                     return (
-                    <tr
-                      key={asset.id}
-                      tabIndex={0}
-                      title="View stock by location"
-                      onClick={showStock}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") showStock();
-                      }}
-                      className="cursor-pointer transition-colors hover:bg-accent/60 focus-visible:bg-accent/60 focus-visible:outline-none"
-                    >
-                      <Td>
-                        <div className="font-medium">{asset.name}</div>
-                        <div className="font-mono text-xs text-muted-foreground">{asset.sku}</div>
-                      </Td>
-                      <Td className="text-center">
-                        <Badge tone={asset.category.tone}>{asset.category.label}</Badge>
-                      </Td>
-                      <Td className="text-center tabular-nums">
-                        {formatSetpoint(asset.setpoint_c)}
-                      </Td>
-                      <Td className="text-center tabular-nums">{asset.stations}</Td>
-                      <Td className="text-center font-medium tabular-nums">
-                        {formatNumber(asset.inStock)}
-                      </Td>
-                    </tr>
+                      <OpenRow key={asset.id} title="View stock by location" onOpen={showStock}>
+                        <Td>
+                          <Cell main={asset.name}>
+                            <span className="font-mono">{asset.sku}</span>
+                          </Cell>
+                        </Td>
+                        <Td className="text-center">
+                          <Badge tone={asset.category.tone}>{asset.category.label}</Badge>
+                        </Td>
+                        <Td className="text-center tabular-nums">
+                          {formatSetpoint(asset.setpoint_c)}
+                        </Td>
+                        <Td className="text-center tabular-nums">{asset.stations}</Td>
+                        <Td className="text-center font-medium tabular-nums">
+                          {formatNumber(asset.inStock)}
+                        </Td>
+                      </OpenRow>
                     );
                   })}
                 </tbody>
               </Table>
             )}
+            <Pagination
+              page={productPage.page}
+              pageCount={productPage.pageCount}
+              total={assets.length}
+              noun={assets.length === 1 ? "product" : "products"}
+              onPage={setPage}
+            />
           </>
         ) : (
           <>
@@ -251,7 +267,10 @@ export function AssetInventory({
                 className="w-48"
                 aria-label="Product"
                 value={productId}
-                onChange={(event) => setProductId(event.target.value)}
+                onChange={(event) => {
+                  setProductId(event.target.value);
+                  setPage(1);
+                }}
               >
                 <option value="">All products</option>
                 {products.map((product) => (
@@ -264,7 +283,10 @@ export function AssetInventory({
                 className="w-48"
                 aria-label="Location"
                 value={locationId}
-                onChange={(event) => setLocationId(event.target.value)}
+                onChange={(event) => {
+                  setLocationId(event.target.value);
+                  setPage(1);
+                }}
               >
                 <option value="">All locations</option>
                 {locations.map((location) => (
@@ -287,24 +309,22 @@ export function AssetInventory({
                   </tr>
                 </thead>
                 <tbody>
-                  {stockRows.map((row) => {
+                  {stockPage.rows.map((row) => {
                     const category = categoryOf(row.setpoint_c);
                     return (
                       <tr key={row.id}>
                         <Td>
-                          <div className="font-medium">{row.product_name}</div>
-                          <div className="font-mono text-xs text-muted-foreground">
-                            {row.sku}
-                          </div>
+                          <Cell main={row.product_name}>
+                            <span className="font-mono">{row.sku}</span>
+                          </Cell>
                         </Td>
                         <Td className="text-center">
                           <Badge tone={category.tone}>{category.label}</Badge>
                         </Td>
                         <Td>
-                          <div className="font-medium">{row.location_code}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {row.location_name}
-                          </div>
+                          <Cell main={row.location_code}>
+                            <span>{row.location_name}</span>
+                          </Cell>
                         </Td>
                         <Td
                           className={
@@ -321,6 +341,13 @@ export function AssetInventory({
                 </tbody>
               </Table>
             )}
+            <Pagination
+              page={stockPage.page}
+              pageCount={stockPage.pageCount}
+              total={stockRows.length}
+              noun={stockRows.length === 1 ? "stock record" : "stock records"}
+              onPage={setPage}
+            />
           </>
         )}
       </Card>

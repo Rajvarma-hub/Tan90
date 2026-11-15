@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { MapPin, Plus, Snowflake, Warehouse } from "lucide-react";
+import { Box, Layers, MapPin, Package, Plus, Snowflake, Warehouse } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, EmptyState, ItemCard, ItemGrid } from "@/components/ui/card";
@@ -121,17 +121,21 @@ export function Stations({ stations }: { stations: StationSummary[] }) {
       />
 
       <StatGrid>
-        <Stat label="Locations" value={formatNumber(stations.length)} />
+        <Stat label="Locations" icon={Warehouse} value={formatNumber(stations.length)} />
         <Stat
           label="Units in stock"
+          icon={Layers}
           value={formatNumber(stations.reduce((sum, s) => sum + s.stockUnits, 0))}
         />
         <Stat
           label="Containers free"
+          icon={Box}
+          tone="green"
           value={formatNumber(stations.reduce((sum, s) => sum + s.containersAvailable, 0))}
         />
         <Stat
           label="Open orders"
+          icon={Package}
           value={formatNumber(stations.reduce((sum, s) => sum + s.openOrders, 0))}
         />
       </StatGrid>

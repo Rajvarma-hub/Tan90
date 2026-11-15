@@ -73,7 +73,7 @@ Open http://localhost:3000. Log-in is not needed. API docs: http://localhost:800
 
 **Settings:** copy `.env.example` to `.env.local` in the repo root. Both apps read this one file (it is git-ignored). Without it, safe development defaults apply. Start the API from the `backend` folder, because the SQLite path in `DATABASE_URL` is relative.
 
-Demo data: 6 locations, 6 customers, 8 products, 60 containers and 15 orders, one in every lifecycle state. Users and their roles are in [backend/guide.txt](backend/guide.txt) (password for all: `password123`).
+Demo data: 6 locations, 6 customers, 26 users, 11 products, 63 containers and 20 orders, with every order and container state present at least once. Users and their roles are in [backend/guide.txt](backend/guide.txt) (password for all: `password123`).
 
 To reset the data: stop the API, delete `backend/tan90.db`, start it again.
 
@@ -94,9 +94,9 @@ backend/
   test.py              Test of every endpoint
 
 src/
-  app/(portal)/        Pages: orders, inventory, assets, deliveries, exceptions
+  app/(portal)/        Pages: orders, inventory, assets, asset-management, deliveries, exceptions
   features/<name>/     One folder per feature (below)
-  components/ui/       Buttons, forms, dialogs, tables, badges, scan input
+  components/ui/       Page template, stat cards, tables, buttons, forms, dialogs, badges, scan input
   components/layout/   Sidebar, header, app shell
   server/              backend.ts (API client), action.ts (server-action wrapper), logger
   config/              Validated env, navigation, site info
@@ -107,11 +107,12 @@ A feature folder holds: `queries.ts` (read data), `actions.ts` (write data, serv
 
 | Feature | Screens |
 | --- | --- |
-| `orders` | Order list, new order, order page with every lifecycle step |
-| `inventory` | Overview, asset inventory, movements, freezing stations |
-| `containers` | Asset Management: container register, container page, tag replacement |
-| `deliveries` | Driver board: load, depart, arrive, deliver, collect |
-| `exceptions` | Unknown scans, missing and damaged containers, resolve |
+| `orders` | Order list with stat-card filters, new order, order page with every lifecycle step |
+| `inventory` | Overview, products and stock per location, stock movements, locations |
+| `containers` | Containers: all, by location, customers, drivers, needs attention. Container page, register, tag replacement |
+| `assets` | Asset Management: registry (edit, unregister, restore) and by-station health |
+| `deliveries` | Deliveries table: one row per run with the next step (load, depart, arrive, deliver, collect) |
+| `exceptions` | Open and resolved exceptions with filters, resolve |
 
 ---
 
@@ -193,6 +194,20 @@ House rules:
 - Never add default passwords or secrets to source code. Use environment variables.
 - Next.js 16 differs from older versions. Read the guide in `node_modules/next/dist/docs/` before using a Next.js feature you do not know.
 
+### UI standards
+
+Every screen follows one template, built from the parts in `src/components/ui`. Reuse them; do not restyle per page.
+
+| Part | Rule |
+| --- | --- |
+| Page | `Page` > `PageHeader` (title, one-line description, main action) > `StatGrid` > one `Card` holding `CardHeader`, `Toolbar`, a table and `Pagination` |
+| Stat card | `Stat` with an icon. Blue is the one accent. Amber and red are the only colours that change a card, and only for a number that needs attention. Give it `onClick` to filter the table below or `href` to link elsewhere |
+| Tables | `Table`, `Th`, `Td`. First column is the thing itself (left, link, `Cell` with one main line and muted lines). Status, counts, dates and quantities are centred. Action columns are labelled "Action", centred, with equal-width buttons. `BadgeCell` puts a short note under a badge, `Dash` is the placeholder for no value, `rowAccent` marks a row that needs attention, `OpenRow` makes a whole row click-to-open |
+| Paging | `paginate(items, page)` and `Pagination`, 10 rows a page. Reset to page 1 whenever a filter changes |
+| Badges | `Badge` with one of five tones: gray (neutral or closed), blue (normal or in progress), green (done or healthy), amber (waiting for someone), red (a problem). The pill is neutral and only the dot carries the colour. Do not add other colours |
+| Buttons | `md` for header actions, forms and dialog footers. `sm` for actions inside table rows. `primary` for the one main action, `outline` for secondary, `danger` for a destructive row action, `ghost` for quiet ones such as Clear filters |
+| Status wording | Put the label and tone for a status in one place (`features/orders/status.ts`, `features/containers/status.ts`, `features/assets/health.ts`) and use it everywhere |
+
 ---
 
 ## 8. Test and verify
@@ -234,13 +249,15 @@ Already done: no default credentials in production code paths, restricted CORS, 
 
 | Area | What works |
 | --- | --- |
-| Orders | List with search, filters and pages. Create order. Full lifecycle in the UI: approve, cancel, pack, dispatch, depart, arrive, deliver, confirm receipt, return, assign driver, collect, receive, inspect, close |
-| Inventory | Overview, asset list, add asset, stock per station, movements timeline with filters, record inward, damage, adjustment and transfer movements, add freezing station |
-| Containers | Register by scan, status counts, container page with order and movement history, tag replacement |
+| Orders | List with search, filters, stat-card filters and pages. Create order. Full lifecycle in the UI: approve, cancel, pack, dispatch, depart, arrive, deliver, confirm receipt, return, assign driver, collect, receive, inspect, close |
+| Inventory | Overview, products, stock per location, stock movements table with filters, record inward, damage, adjustment and transfer movements, add product, add location |
+| Containers | Tracking by status, location, customer and driver. Register by scan, container page with order and movement history, tag replacement |
+| Asset Management | Registry with health and status, edit, unregister, restore, by-station health cards |
 | Scanning | Barcode or RFID reader input, typed codes, picker when no scanner, unknown code handling that raises an exception |
-| Deliveries | Driver board with load, depart, arrive, deliver, collect |
-| Exceptions | Open and resolved lists, resolve |
-| API | 66 routes across auth, orders, packing, dispatch, deliveries, returns, containers, inventory, stations, products, exceptions, notifications, admin. 116 automated checks pass |
+| Deliveries | Table of every open run with the next step for each: load and depart, arrive, deliver, collect |
+| Exceptions | Open and resolved tables with search and filters, resolve |
+| Interface | One page template, one table style, five-tone colour palette, search, filters and paging on every list |
+| API | 70 routes across auth, orders, packing, dispatch, deliveries, returns, containers, inventory, stations, products, directory, exceptions, notifications, admin. 116 automated checks pass |
 | Safety | Production config guards, restricted CORS, input checks with zod and Pydantic |
 | Delivery | Production build passes, Docker image for the portal |
 
@@ -266,11 +283,10 @@ Ordered by priority. Items 1 to 6 block production.
 
 ### Known issues
 
-- The order page breadcrumb shows the internal ID (`ord-5FC231DD`) instead of the order number (`ORD-0020`).
 - Opening an unknown order or container ID shows the not-found page but the HTTP status is 200 in development.
 - The dispatch driver list is not limited to the order's station (a Chennai order lists Bangalore drivers). Confirm whether that is intended.
 - The movements list loads the latest 500 only.
-- `backend/API.md` is out of date. It documents 52 endpoints; the API has 66 routes. Missing: inventory, directory (customers, users), container summary, lookup and detail, order detail and cancel. Swagger at `/docs` is always correct.
+- `backend/API.md` documents all 70 routes. When you add a route, add it there too; Swagger at `/docs` is always correct.
 - The root `AGENTS.md` is generated by Next.js tooling. Leave it alone.
 
 ### Recommended order of work

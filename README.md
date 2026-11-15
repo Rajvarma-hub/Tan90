@@ -95,10 +95,10 @@ With `ENVIRONMENT=production` the API refuses to start with a weak `JWT_SECRET` 
 ```
 backend/app/      API: routers, services, models, schemas, seed data
 src/app/          Portal pages and routes
-src/features/     One folder per feature: orders, inventory, containers, deliveries, exceptions
-src/components/   Shared UI and the app shell
+src/features/     One folder per feature: orders, inventory, containers, assets, deliveries, exceptions
+src/components/   Shared UI (one page template, table style and colour palette) and the app shell
 src/server/       Server-only code, including the API client
-docs/             Developer guide
+docs/             Developer guide, including the UI standards
 ```
 
 ## Documentation

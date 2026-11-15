@@ -17,14 +17,6 @@ const timeFormat = new Intl.DateTimeFormat("en-IN", {
   timeZone: "Asia/Kolkata",
 });
 
-const dayFormat = new Intl.DateTimeFormat("en-IN", {
-  weekday: "long",
-  day: "numeric",
-  month: "long",
-  year: "numeric",
-  timeZone: "Asia/Kolkata",
-});
-
 export function formatDate(value: string | null | undefined): string {
   return value ? dateFormat.format(parseUtc(value)) : "—";
 }
@@ -35,10 +27,6 @@ export function formatTime(value: string | null | undefined): string {
 
 export function formatDateTime(value: string | null | undefined): string {
   return value ? `${formatDate(value)}, ${formatTime(value)}` : "—";
-}
-
-export function formatDay(value: string): string {
-  return dayFormat.format(parseUtc(value));
 }
 
 export function formatNumber(value: number): string {

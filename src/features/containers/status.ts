@@ -2,15 +2,15 @@ import type { BadgeTone } from "@/components/ui/badge";
 
 export const containerStatusMeta: Record<string, { label: string; tone: BadgeTone }> = {
   AVAILABLE: { label: "Available", tone: "green" },
-  PACKING: { label: "Packing", tone: "cyan" },
-  PACKED: { label: "Packed", tone: "cyan" },
-  IN_TRANSIT_TO_CUSTOMER: { label: "In transit to customer", tone: "purple" },
+  PACKING: { label: "Packing", tone: "blue" },
+  PACKED: { label: "Packed", tone: "blue" },
+  IN_TRANSIT_TO_CUSTOMER: { label: "In transit to customer", tone: "blue" },
   WITH_CUSTOMER: { label: "With customer", tone: "blue" },
-  RETURN_REQUESTED: { label: "Return requested", tone: "orange" },
-  IN_TRANSIT_TO_STATION: { label: "Returning to station", tone: "orange" },
+  RETURN_REQUESTED: { label: "Return requested", tone: "amber" },
+  IN_TRANSIT_TO_STATION: { label: "Returning to station", tone: "blue" },
   UNDER_INSPECTION: { label: "Under inspection", tone: "amber" },
   DAMAGED: { label: "Damaged", tone: "red" },
-  QUARANTINED: { label: "Quarantined", tone: "red" },
+  QUARANTINED: { label: "Quarantined", tone: "amber" },
   MISSING: { label: "Missing", tone: "red" },
   RETIRED: { label: "Unregistered", tone: "gray" },
 };

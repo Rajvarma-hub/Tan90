@@ -4,8 +4,18 @@ import { useState } from "react";
 import Link from "next/link";
 import type { Route } from "next";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowRight, Snowflake, Warehouse } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import {
+  Archive,
+  ArrowRight,
+  Boxes,
+  ScanSearch,
+  ShieldCheck,
+  Snowflake,
+  TriangleAlert,
+  Warehouse,
+  type LucideIcon,
+} from "lucide-react";
+import { Badge, type BadgeTone } from "@/components/ui/badge";
 import { buttonClass } from "@/components/ui/button";
 import { Card, CardHeader, EmptyState, ItemCard, ItemGrid } from "@/components/ui/card";
 import { Page, PageHeader, Stat, StatGrid } from "@/components/ui/page";
@@ -14,6 +24,7 @@ import { AssetRegistry } from "@/features/assets/components/asset-registry";
 import { HealthBar } from "@/features/assets/components/health";
 import {
   healthCounts,
+  healthMeta,
   healthOf,
   healthOrder,
   needsAttention,
@@ -114,9 +125,18 @@ export function AssetManagement({
     setHealth(next);
     if (!station) router.push(viewHref("registry"));
   };
-  const stat = (label: string, value: number, filter: HealthFilter, unfiltered = false) => (
+  const stat = (
+    label: string,
+    value: number,
+    filter: HealthFilter,
+    icon: LucideIcon,
+    tone: BadgeTone,
+    unfiltered = false,
+  ) => (
     <Stat
       label={label}
+      icon={icon}
+      tone={tone}
       value={formatNumber(value)}
       active={!unfiltered && health === filter}
       onClick={() => showHealth(unfiltered || health === filter ? "" : filter)}
@@ -144,11 +164,11 @@ export function AssetManagement({
       />
 
       <StatGrid>
-        {stat(station ? "Assets here" : "Total assets", totals.total, "", true)}
-        {stat("Healthy", totals.counts.healthy, "healthy")}
-        {stat("Under inspection", totals.counts.inspection, "inspection")}
-        {stat("Needs attention", totals.attention, "attention")}
-        {stat("Unregistered", totals.counts.retired, "retired")}
+        {stat(station ? "Assets here" : "Total assets", totals.total, "", Boxes, "blue", true)}
+        {stat("Healthy", totals.counts.healthy, "healthy", ShieldCheck, healthMeta.healthy.tone)}
+        {stat("Under inspection", totals.counts.inspection, "inspection", ScanSearch, healthMeta.inspection.tone)}
+        {stat("Needs attention", totals.attention, "attention", TriangleAlert, totals.attention ? "red" : "green")}
+        {stat("Unregistered", totals.counts.retired, "retired", Archive, healthMeta.retired.tone)}
       </StatGrid>
 
       {station && (
@@ -193,7 +213,7 @@ export function AssetManagement({
             station
               ? "Containers assigned to this location, including those currently out."
               : view === "registry"
-                ? "Edit a container's tag, type or location, or unregister it."
+                ? "Newest first. Edit a container's tag, type or location, or unregister it."
                 : "How many containers each location has and how healthy they are."
           }
           actions={

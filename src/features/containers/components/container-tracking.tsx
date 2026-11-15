@@ -6,7 +6,8 @@ import { ArrowRight, Snowflake, TriangleAlert, Truck, Warehouse } from "lucide-r
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonClass } from "@/components/ui/button";
 import { EmptyState, ItemCard, ItemGrid } from "@/components/ui/card";
-import { Table, Td, Th } from "@/components/ui/table";
+import { OpenRow } from "@/components/ui/open-row";
+import { Cell, Table, Td, Th } from "@/components/ui/table";
 import {
   AT_CUSTOMER,
   AT_LOCATION,
@@ -52,7 +53,6 @@ function CodeLinks({ list }: { list: Container[] }) {
         <li key={container.id}>
           <Link
             href={`/assets/${container.id}`}
-            onClick={(event) => event.stopPropagation()}
             className="font-mono text-xs hover:text-primary hover:underline"
           >
             {container.container_code}
@@ -72,7 +72,7 @@ function Count({ value, tone }: { value: number; tone?: "warn" }) {
     <span
       className={cn(
         "font-medium tabular-nums",
-        value === 0 ? "text-muted-foreground/60" : tone === "warn" && "text-orange-400",
+        value === 0 ? "text-muted-foreground/60" : tone === "warn" && "text-amber-400",
       )}
     >
       {formatNumber(value)}
@@ -90,17 +90,14 @@ function PeopleRow({
   children: ReactNode;
 }) {
   return (
-    <tr
-      onClick={disabled ? undefined : onShow}
-      className={cn("transition-colors", !disabled && "cursor-pointer hover:bg-accent/50")}
-    >
+    <OpenRow disabled={disabled} onOpen={onShow}>
       {children}
-      <Td className="text-right">
-        <Button variant="outline" size="sm" disabled={disabled} onClick={onShow}>
+      <Td className="text-center">
+        <Button variant="outline" size="sm" className="w-24" disabled={disabled} onClick={onShow}>
           View <ArrowRight />
         </Button>
       </Td>
-    </tr>
+    </OpenRow>
   );
 }
 
@@ -247,7 +244,7 @@ export function CustomerTracking({
           <Th className="text-center">Return requested</Th>
           <Th className="text-center">Orders</Th>
           <Th>Containers</Th>
-          <Th />
+          <Th className="text-center">Action</Th>
         </tr>
       </thead>
       <tbody>
@@ -258,10 +255,11 @@ export function CustomerTracking({
             onShow={() => onShow({ ids: held.map((c) => c.id) })}
           >
             <Td>
-              <div className="font-medium">{customer.name}</div>
-              <div className="text-xs text-muted-foreground">
-                {customer.contacts.length > 0 ? customer.contacts.join(", ") : "No portal user"}
-              </div>
+              <Cell main={customer.name}>
+                <span>
+                  {customer.contacts.length > 0 ? customer.contacts.join(", ") : "No portal user"}
+                </span>
+              </Cell>
             </Td>
             <Td className="text-center">
               <Count value={held.length} />
@@ -329,7 +327,7 @@ export function DriverTracking({
           <Th className="text-center">Returning</Th>
           <Th className="text-center">Orders</Th>
           <Th>Containers</Th>
-          <Th />
+          <Th className="text-center">Action</Th>
         </tr>
       </thead>
       <tbody>
@@ -340,10 +338,9 @@ export function DriverTracking({
             onShow={() => onShow({ ids: carried.map((c) => c.id) })}
           >
             <Td>
-              <div className="font-medium">{driver.name}</div>
-              <div className="text-xs text-muted-foreground">
-                {carried.length === 0 ? "Idle" : "On the road"}
-              </div>
+              <Cell main={driver.name}>
+                <span>{carried.length === 0 ? "Idle" : "On the road"}</span>
+              </Cell>
             </Td>
             <Td className="text-center">
               <Count value={carried.length} />

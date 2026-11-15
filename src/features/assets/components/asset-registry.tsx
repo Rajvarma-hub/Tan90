@@ -7,11 +7,18 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/card";
 import { Input, Select } from "@/components/ui/form";
 import { Toolbar } from "@/components/ui/page";
-import { PAGE_SIZE, Pagination } from "@/components/ui/pagination";
-import { Cell, Table, Td, Th } from "@/components/ui/table";
+import { paginate, Pagination } from "@/components/ui/pagination";
+import { BadgeCell, Cell, rowAccent, Table, Td, Th } from "@/components/ui/table";
 import { AssetActions } from "@/features/assets/components/asset-actions";
 import { HealthBadge } from "@/features/assets/components/health";
-import { healthMeta, healthOf, healthOrder, matchesHealth, type HealthFilter } from "@/features/assets/health";
+import {
+  healthMeta,
+  healthOf,
+  healthOrder,
+  matchesHealth,
+  needsAttention,
+  type HealthFilter,
+} from "@/features/assets/health";
 import type { Asset, AssetStation } from "@/features/assets/queries";
 import {
   AT_LOCATION,
@@ -20,6 +27,15 @@ import {
 } from "@/features/containers/status";
 import type { ContainerType } from "@/features/containers/types";
 import { formatDate, parseUtc } from "@/lib/format";
+import { cn } from "@/lib/utils";
+
+// Where the container physically is, as a line under its assigned location.
+function presence(asset: Asset): string {
+  if (asset.status === "RETIRED") return "Out of circulation";
+  if (asset.status === "MISSING") return "Whereabouts unknown";
+  if (AT_LOCATION.includes(asset.status)) return "On site";
+  return whereabouts(asset).primary;
+}
 
 export function AssetRegistry({
   assets,
@@ -67,9 +83,7 @@ export function AssetRegistry({
       );
   }, [assets, search, health, locationId, type, tag]);
 
-  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const currentPage = Math.min(page, pageCount);
-  const rows = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const { rows, page: currentPage, pageCount } = paginate(filtered, page);
   const hasFilters = Boolean(search || health || locationId || type || tag);
 
   return (
@@ -174,17 +188,24 @@ export function AssetRegistry({
             <tr>
               <Th>Container and type</Th>
               <Th>RFID tag</Th>
-              <Th>Registered (newest first)</Th>
+              <Th>Registered</Th>
               <Th className="text-center">Health and status</Th>
               {!fixedLocation && <Th>Assigned location</Th>}
-              <Th className="text-right">Actions</Th>
+              <Th className="text-center">Actions</Th>
             </tr>
           </thead>
           <tbody>
             {rows.map((asset) => {
               const retired = asset.status === "RETIRED";
+              const assetHealth = healthOf(asset.status);
               return (
-                <tr key={asset.id} className={retired ? "opacity-70" : undefined}>
+                <tr
+                  key={asset.id}
+                  className={cn(
+                    retired && "opacity-70",
+                    rowAccent(needsAttention(assetHealth) ? healthMeta[assetHealth].tone : null),
+                  )}
+                >
                   <Td>
                     <Cell
                       main={
@@ -201,7 +222,7 @@ export function AssetRegistry({
                   </Td>
                   <Td>
                     {asset.epc ? (
-                      <span className="font-mono text-xs">{asset.epc}</span>
+                      <span className="font-mono text-xs text-muted-foreground">{asset.epc}</span>
                     ) : (
                       <Badge tone={retired ? "gray" : "amber"}>
                         {retired ? "Tag removed" : "No tag"}
@@ -214,29 +235,24 @@ export function AssetRegistry({
                     </Cell>
                   </Td>
                   <Td className="text-center">
-                    <div className="grid justify-items-center gap-1">
-                      <HealthBadge health={healthOf(asset.status)} />
-                      {!retired && (
-                        <span className="text-xs text-muted-foreground">
-                          {containerStatusMeta[asset.status]?.label}
-                        </span>
-                      )}
-                    </div>
+                    <BadgeCell
+                      badge={<HealthBadge health={assetHealth} />}
+                      note={
+                        !retired &&
+                        containerStatusMeta[asset.status]?.label !== healthMeta[assetHealth].label
+                          ? containerStatusMeta[asset.status]?.label
+                          : null
+                      }
+                    />
                   </Td>
                   {!fixedLocation && (
                     <Td>
                       <Cell main={asset.location_code ?? "—"}>
-                        <span>
-                          {retired
-                            ? "Out of circulation"
-                            : AT_LOCATION.includes(asset.status)
-                              ? "On site"
-                              : whereabouts(asset).primary}
-                        </span>
+                        <span>{presence(asset)}</span>
                       </Cell>
                     </Td>
                   )}
-                  <Td className="text-right">
+                  <Td className="text-center">
                     <AssetActions asset={asset} types={types} stations={stations} />
                   </Td>
                 </tr>

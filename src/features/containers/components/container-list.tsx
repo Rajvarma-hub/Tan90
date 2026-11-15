@@ -3,12 +3,15 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Box, Building2, TriangleAlert, Truck, Undo2, type LucideIcon } from "lucide-react";
+import type { BadgeTone } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, EmptyState } from "@/components/ui/card";
 import { Input, Select } from "@/components/ui/form";
+import { OpenRow } from "@/components/ui/open-row";
 import { Page, PageHeader, Stat, StatGrid, Toolbar } from "@/components/ui/page";
-import { PAGE_SIZE, Pagination } from "@/components/ui/pagination";
-import { Cell, Table, Td, Th } from "@/components/ui/table";
+import { paginate, Pagination } from "@/components/ui/pagination";
+import { Cell, Dash, rowAccent, Table, Td, Th } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
 import { ContainerScan } from "@/features/containers/components/container-scan";
 import { ContainerStatusBadge } from "@/features/containers/components/container-status-badge";
@@ -43,6 +46,14 @@ import {
 } from "@/features/containers/views";
 import type { Option } from "@/features/orders/types";
 import { formatNumber } from "@/lib/format";
+
+const bucketLook: Record<string, { icon: LucideIcon; tone: BadgeTone }> = {
+  "In stock": { icon: Box, tone: "green" },
+  "Out for delivery": { icon: Truck, tone: "blue" },
+  "With customers": { icon: Building2, tone: "blue" },
+  "Coming back": { icon: Undo2, tone: "amber" },
+  "Needs attention": { icon: TriangleAlert, tone: "red" },
+};
 
 export function ContainerList({
   containers,
@@ -98,9 +109,7 @@ export function ContainerList({
     );
   }, [containers, view, ids, search, statuses, status, locationId, type]);
 
-  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const currentPage = Math.min(page, pageCount);
-  const rows = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const { rows, page: currentPage, pageCount } = paginate(filtered, page);
   const resetPage = () => setPage(1);
   const hasFilters = Boolean(
     search || (view === "all" && (ids || statuses)) || status || locationId || type,
@@ -148,10 +157,13 @@ export function ContainerList({
             0,
           );
           const active = statuses === bucket.statuses;
+          const look = bucketLook[bucket.label];
           return (
             <Stat
               key={bucket.label}
               label={bucket.label}
+              icon={look.icon}
+              tone={bucket.label === "Needs attention" && count === 0 ? "green" : look.tone}
               value={formatNumber(count)}
               active={active}
               onClick={() => {
@@ -289,17 +301,20 @@ export function ContainerList({
             </thead>
             <tbody>
               {rows.map((container) => (
-                <tr
+                <OpenRow
                   key={container.id}
-                  onClick={() => router.push(`/assets/${container.id}`)}
-                  className="cursor-pointer transition-colors hover:bg-accent/50"
+                  onOpen={() => router.push(`/assets/${container.id}`)}
+                  className={rowAccent(
+                    NEEDS_ATTENTION.includes(container.status)
+                      ? containerStatusMeta[container.status]?.tone
+                      : null,
+                  )}
                 >
                   <Td>
                     <Cell
                       main={
                         <Link
                           href={`/assets/${container.id}`}
-                          onClick={(event) => event.stopPropagation()}
                           className="hover:text-primary hover:underline"
                         >
                           {container.container_code}
@@ -326,7 +341,6 @@ export function ContainerList({
                         main={
                           <Link
                             href={`/orders/${container.current_order.id}`}
-                            onClick={(event) => event.stopPropagation()}
                             className="hover:text-primary hover:underline"
                           >
                             {container.current_order.order_number}
@@ -336,10 +350,10 @@ export function ContainerList({
                         <span>{container.current_order.customer_name}</span>
                       </Cell>
                     ) : (
-                      <span className="text-muted-foreground">—</span>
+                      <Dash />
                     )}
                   </Td>
-                </tr>
+                </OpenRow>
               ))}
             </tbody>
           </Table>

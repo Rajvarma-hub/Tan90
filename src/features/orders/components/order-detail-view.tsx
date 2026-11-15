@@ -3,9 +3,9 @@ import { Badge } from "@/components/ui/badge";
 import { buttonClass } from "@/components/ui/button";
 import { Card, CardHeader, Detail, DetailGrid, EmptyState } from "@/components/ui/card";
 import { Page, PageHeader } from "@/components/ui/page";
-import { Table, Td, Th } from "@/components/ui/table";
+import { BadgeCell, Cell, Dash, Table, Td, Th } from "@/components/ui/table";
 import { ContainerStatusBadge } from "@/features/containers/components/container-status-badge";
-import { exceptionTitle, parseDetails } from "@/features/exceptions/labels";
+import { exceptionExplanation, exceptionTitle, parseDetails } from "@/features/exceptions/labels";
 import type { ExceptionRecord } from "@/features/exceptions/queries";
 import { OrderActions } from "@/features/orders/components/order-actions";
 import { PackingPanel } from "@/features/orders/components/packing-panel";
@@ -61,39 +61,54 @@ export function OrderDetailView({
               </Link>
             }
           />
-          <ul className="divide-y divide-border/60 rounded-lg border border-border/60">
-            {exceptions.map((exception) => {
-              const { containerId } = parseDetails(exception.details);
-              return (
-                <li
-                  key={exception.id}
-                  className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3.5 text-sm"
-                >
-                  <div className="flex min-w-0 items-center gap-3">
-                    <Badge tone={exception.severity === "CRITICAL" ? "red" : "amber"}>
-                      {humanize(exception.severity)}
-                    </Badge>
-                    <span className="font-medium text-card-foreground">
-                      {exceptionTitle(exception.kind)}
-                    </span>
-                    {containerId && (
-                      <Link
-                        href={`/assets/${containerId}`}
-                        className="font-mono text-xs hover:text-primary hover:underline"
-                      >
-                        {containerId.toUpperCase()}
-                      </Link>
-                    )}
-                  </div>
-                  <span className="text-xs text-muted-foreground">
-                    {exception.status === "OPEN"
-                      ? `Open since ${formatDateTime(exception.created_at)}`
-                      : `Resolved ${formatDateTime(exception.resolved_at)}`}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
+          <Table>
+            <thead>
+              <tr>
+                <Th>Issue</Th>
+                <Th className="text-center">Severity</Th>
+                <Th>Container</Th>
+                <Th className="text-center">Status</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {exceptions.map((exception) => {
+                const { containerId } = parseDetails(exception.details);
+                const open = exception.status === "OPEN";
+                return (
+                  <tr key={exception.id}>
+                    <Td>
+                      <Cell main={exceptionTitle(exception.kind)} className="max-w-64">
+                        <span>{exceptionExplanation(exception.kind)}</span>
+                      </Cell>
+                    </Td>
+                    <Td className="text-center">
+                      <Badge tone={exception.severity === "CRITICAL" ? "red" : "amber"}>
+                        {humanize(exception.severity)}
+                      </Badge>
+                    </Td>
+                    <Td>
+                      {containerId ? (
+                        <Link
+                          href={`/assets/${containerId}`}
+                          className="font-mono text-xs hover:text-primary hover:underline"
+                        >
+                          {containerId.toUpperCase()}
+                        </Link>
+                      ) : (
+                        <Dash />
+                      )}
+                    </Td>
+                    <Td className="text-center">
+                      <BadgeCell
+                        badge={<Badge tone={open ? "amber" : "green"}>{open ? "Open" : "Resolved"}</Badge>}
+                        note={formatDateTime(open ? exception.created_at : exception.resolved_at)}
+                      />
+                    </Td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </Table>
         </Card>
       )}
 
@@ -149,10 +164,9 @@ export function OrderDetailView({
             {order.items.map((item) => (
               <tr key={item.id}>
                 <Td>
-                  <div className="font-medium">{item.product_name}</div>
-                  <div className="font-mono text-xs text-muted-foreground">
-                    {item.sku ?? "—"}
-                  </div>
+                  <Cell main={item.product_name}>
+                    <span className="font-mono">{item.sku ?? "—"}</span>
+                  </Cell>
                 </Td>
                 <Td className="text-center tabular-nums">
                   {formatSetpoint(item.setpoint_c)}
@@ -187,23 +201,26 @@ export function OrderDetailView({
               {order.containers.map((container) => (
                 <tr key={container.container_id}>
                   <Td>
-                    <Link
-                      href={`/assets/${container.container_id}`}
-                      className="font-medium hover:text-primary hover:underline"
+                    <Cell
+                      main={
+                        <Link
+                          href={`/assets/${container.container_id}`}
+                          className="hover:text-primary hover:underline"
+                        >
+                          {container.container_code}
+                        </Link>
+                      }
                     >
-                      {container.container_code}
-                    </Link>
-                    <div className="font-mono text-xs text-muted-foreground">
-                      {container.epc ?? "No tag"}
-                    </div>
+                      <span className="font-mono">{container.epc ?? "No tag"}</span>
+                    </Cell>
                   </Td>
                   <Td className="text-center">{container.container_type}</Td>
                   <Td>
-                    {container.contents.length === 0
-                      ? "—"
-                      : container.contents
-                          .map((line) => `${line.qty} × ${line.sku}`)
-                          .join(", ")}
+                    {container.contents.length === 0 ? (
+                      <Dash />
+                    ) : (
+                      container.contents.map((line) => `${line.qty} × ${line.sku}`).join(", ")
+                    )}
                   </Td>
                   <Td className="text-center">
                     <ContainerStatusBadge status={container.status} />
