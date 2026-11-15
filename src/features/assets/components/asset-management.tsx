@@ -1,5 +1,6 @@
 "use client";
 
+import { Can } from "@/components/auth/user-context";
 import { useState } from "react";
 import Link from "next/link";
 import type { Route } from "next";
@@ -160,7 +161,11 @@ export function AssetManagement({
             </Badge>
           )
         }
-        actions={<RegisterDialog types={types} stations={stationOptions} />}
+        actions={
+          <Can permission="containers.register">
+            <RegisterDialog types={types} stations={stationOptions} />
+          </Can>
+        }
       />
 
       <StatGrid>

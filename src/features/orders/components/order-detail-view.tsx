@@ -1,4 +1,6 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
+import { Can } from "@/components/auth/user-context";
 import { Badge } from "@/components/ui/badge";
 import { buttonClass } from "@/components/ui/button";
 import { Card, CardHeader, Detail, DetailGrid, EmptyState } from "@/components/ui/card";
@@ -7,6 +9,8 @@ import { BadgeCell, Cell, Dash, Table, Td, Th } from "@/components/ui/table";
 import { ContainerStatusBadge } from "@/features/containers/components/container-status-badge";
 import { exceptionExplanation, exceptionTitle, parseDetails } from "@/features/exceptions/labels";
 import type { ExceptionRecord } from "@/features/exceptions/queries";
+import { ShareLocation } from "@/features/deliveries/components/share-location";
+import { VehicleLocation } from "@/features/deliveries/components/vehicle-location";
 import { OrderActions } from "@/features/orders/components/order-actions";
 import { PackingPanel } from "@/features/orders/components/packing-panel";
 import { OrderProgress } from "@/features/orders/components/order-progress";
@@ -24,10 +28,18 @@ export function OrderDetailView({
   order,
   options,
   exceptions,
+  isStaff,
+  deliveryCode,
+  initialCode,
 }: {
   order: OrderDetail;
   options: OrderActionOptions;
   exceptions: ExceptionRecord[];
+  // Container pages are for staff; drivers and customers see plain text instead.
+  isStaff: boolean;
+  // The QR the driver shows on arrival. Rendered on the server, so it arrives as an element.
+  deliveryCode?: ReactNode;
+  initialCode?: string;
 }) {
   const totalAssets = order.items.reduce((sum, item) => sum + item.quantity, 0);
   const openIssues = exceptions.filter((exception) => exception.status === "OPEN").length;
@@ -43,8 +55,24 @@ export function OrderDetailView({
 
       <OrderProgress status={order.status} />
       {/* Keyed so dialog state resets after each step. */}
-      <OrderActions key={order.status} order={order} options={options} />
-      {order.status === "PACKING" && <PackingPanel order={order} options={options} />}
+      <OrderActions
+        key={order.status}
+        order={order}
+        options={options}
+        initialCode={initialCode}
+      />
+      {deliveryCode}
+      {order.task_id && ["DISPATCHED", "IN_TRANSIT", "ARRIVED"].includes(order.status) && (
+        <Can permission="delivery.share_location">
+          <ShareLocation taskId={order.task_id} />
+        </Can>
+      )}
+      <VehicleLocation order={order} />
+      {order.status === "PACKING" && (
+        <Can permission="orders.pack">
+          <PackingPanel order={order} options={options} />
+        </Can>
+      )}
 
       {exceptions.length > 0 && (
         <Card>
@@ -203,12 +231,16 @@ export function OrderDetailView({
                   <Td>
                     <Cell
                       main={
-                        <Link
-                          href={`/assets/${container.container_id}`}
-                          className="hover:text-primary hover:underline"
-                        >
-                          {container.container_code}
-                        </Link>
+                        isStaff ? (
+                          <Link
+                            href={`/assets/${container.container_id}`}
+                            className="hover:text-primary hover:underline"
+                          >
+                            {container.container_code}
+                          </Link>
+                        ) : (
+                          container.container_code
+                        )
                       }
                     >
                       <span className="font-mono">{container.epc ?? "No tag"}</span>
@@ -239,7 +271,7 @@ export function OrderDetailView({
             <DetailGrid>
               <Detail label="Driver">{order.driver.full_name}</Detail>
               <Detail label="Vehicle">{order.vehicle_ref ?? "—"}</Detail>
-              <Detail label="Driver email">{order.driver.email}</Detail>
+              {order.driver.email && <Detail label="Driver email">{order.driver.email}</Detail>}
               <Detail label="Return driver">
                 {order.return_driver?.full_name ?? "—"}
               </Detail>

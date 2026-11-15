@@ -1,5 +1,6 @@
 "use client";
 
+import { Can } from "@/components/auth/user-context";
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { CircleAlert, CircleCheck, ListChecks, TriangleAlert } from "lucide-react";
@@ -127,9 +128,11 @@ function ExceptionTableRow({
       </Td>
       {!resolved && (
         <Td className="text-center">
-          <Button variant="outline" size="sm" className="w-28" disabled={pending} onClick={onResolve}>
-            Resolve
-          </Button>
+          <Can permission="exceptions.resolve">
+            <Button variant="outline" size="sm" className="w-28" disabled={pending} onClick={onResolve}>
+              Resolve
+            </Button>
+          </Can>
         </Td>
       )}
     </tr>

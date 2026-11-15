@@ -15,6 +15,8 @@ def list_returns(user: User = Depends(get_current_user),
     q = db.query(Order).filter(Order.return_requested_at.isnot(None))
     if user.role == "CUSTOMER":
         q = q.filter(Order.customer_id == user.customer_id)
+    elif user.role == "DRIVER":
+        q = q.filter(Order.return_driver_id == user.id)
     elif user.role in ("FREEZING_STATION_MANAGER", "PACKING_WORKER"):
         q = q.filter(Order.station_id == user.location_id)
     rows = q.order_by(Order.return_requested_at.desc()).all()

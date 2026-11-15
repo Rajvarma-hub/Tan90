@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.core.deps import get_current_user, require_roles
+from app.core.deps import require_roles, require_staff
 from app.db.session import get_db
 from app.models.inventory import InventoryBalance, InventoryMovement
 from app.models.location import Location
@@ -29,11 +29,9 @@ def _scope(user: User, location_id: str | None) -> str | None:
 def list_balances(
     location_id: str | None = None,
     product_id: str | None = None,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_staff),
     db: Session = Depends(get_db),
 ):
-    if user.role == "CUSTOMER":
-        raise HTTPException(403, "Insufficient permissions")
     q = db.query(InventoryBalance, Product, Location).join(
         Product, Product.id == InventoryBalance.product_id
     ).join(Location, Location.id == InventoryBalance.location_id)
@@ -60,11 +58,9 @@ def list_movements(
     product_id: str | None = None,
     direction: str | None = Query(None, pattern="^(INWARD|OUTWARD)$"),
     limit: int = Query(200, ge=1, le=1000),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_staff),
     db: Session = Depends(get_db),
 ):
-    if user.role == "CUSTOMER":
-        raise HTTPException(403, "Insufficient permissions")
     q = db.query(InventoryMovement, Product, Location).join(
         Product, Product.id == InventoryMovement.product_id
     ).join(Location, Location.id == InventoryMovement.location_id)

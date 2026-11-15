@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
+import { RequirePermission } from "@/components/auth/require-permission";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { ExceptionsTable } from "@/features/exceptions/components/exceptions-table";
 import { getExceptions } from "@/features/exceptions/queries";
@@ -13,7 +14,9 @@ async function Exceptions() {
 export default function ExceptionsPage() {
   return (
     <Suspense fallback={<PageSkeleton />}>
-      <Exceptions />
+      <RequirePermission permission="exceptions.view">
+        <Exceptions />
+      </RequirePermission>
     </Suspense>
   );
 }

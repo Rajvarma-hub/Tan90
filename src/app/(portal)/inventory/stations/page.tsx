@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
+import { RequirePermission } from "@/components/auth/require-permission";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { Stations } from "@/features/inventory/components/stations";
 import { getStationSummaries } from "@/features/inventory/queries";
@@ -13,7 +14,9 @@ async function StationList() {
 export default function StationsPage() {
   return (
     <Suspense fallback={<PageSkeleton />}>
-      <StationList />
+      <RequirePermission permission="staff.view">
+        <StationList />
+      </RequirePermission>
     </Suspense>
   );
 }

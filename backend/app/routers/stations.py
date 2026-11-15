@@ -73,6 +73,24 @@ def create_location(
 
 # ─── Update ────────────────────────────────────────────────────────────
 
+def _require_empty(db: Session, loc: Location) -> None:
+    """A location with work, stock or containers cannot be switched off."""
+    from sqlalchemy import func
+    from app.models.container import Container
+    from app.models.inventory import InventoryBalance
+
+    open_orders = db.query(func.count(Order.id)).filter(
+        Order.station_id == loc.id, Order.status.notin_(["CLOSED", "CANCELLED"])).scalar()
+    stock = db.query(func.coalesce(func.sum(InventoryBalance.quantity), 0)).filter(
+        InventoryBalance.location_id == loc.id).scalar()
+    containers = db.query(func.count(Container.id)).filter(
+        Container.current_location_id == loc.id, Container.status != "RETIRED").scalar()
+    if open_orders or stock or containers:
+        raise HTTPException(409, (
+            f"{loc.code} still has {open_orders} open orders, {stock} units of stock and "
+            f"{containers} containers. Move or finish them before switching it off."))
+
+
 @router.patch("/{location_id}", response_model=LocationOut)
 def update_location(
     location_id: str,
@@ -84,7 +102,11 @@ def update_location(
     if not loc:
         raise HTTPException(404, "Location not found")
 
-    changed = payload.model_dump(exclude_unset=True)
+    # An explicit null only makes sense for the address; the other fields must keep a value.
+    changed = {k: v for k, v in payload.model_dump(exclude_unset=True).items()
+               if v is not None or k == "address"}
+    if changed.get("is_active") is False and loc.is_active:
+        _require_empty(db, loc)
     for k, v in changed.items():
         setattr(loc, k, v)
     db.add(AuditLog(

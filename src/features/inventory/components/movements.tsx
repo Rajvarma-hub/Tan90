@@ -1,5 +1,6 @@
 "use client";
 
+import { Can } from "@/components/auth/user-context";
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Plus, Scale } from "lucide-react";
@@ -8,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader, EmptyState } from "@/components/ui/card";
 import { Dialog, DialogActions } from "@/components/ui/dialog";
 import { Field, FormError, Input, Select } from "@/components/ui/form";
+import { ExportButton } from "@/components/ui/export-button";
 import { Page, PageHeader, Stat, StatGrid, Toolbar } from "@/components/ui/page";
 import { paginate, Pagination } from "@/components/ui/pagination";
 import { BadgeCell, Cell, Table, Td, Th } from "@/components/ui/table";
@@ -306,7 +308,28 @@ export function Movements({
       <PageHeader
         title="Stock Movements"
         description="Every inward and outward stock change across all locations."
-        actions={<RecordMovementDialog products={products} stations={stations} />}
+        actions={
+          <>
+            <ExportButton
+              filename="stock-movements"
+              headers={["When (UTC)", "Direction", "Quantity", "Reason", "SKU", "Product", "Location", "Reference", "By"]}
+              rows={filtered.map((m) => [
+                m.occurred_at,
+                m.direction,
+                m.quantity,
+                m.reason,
+                m.sku,
+                m.product_name,
+                m.location_code,
+                m.reference_id,
+                m.actor_name,
+              ])}
+            />
+            <Can permission="inventory.move">
+              <RecordMovementDialog products={products} stations={stations} />
+            </Can>
+          </>
+        }
       />
 
       <StatGrid>

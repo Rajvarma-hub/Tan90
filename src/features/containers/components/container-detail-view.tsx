@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Can } from "@/components/auth/user-context";
 import { Card, CardHeader, Detail, DetailGrid, EmptyState } from "@/components/ui/card";
 import { Page, PageHeader } from "@/components/ui/page";
 import { Cell, Table, Td, Th } from "@/components/ui/table";
@@ -28,7 +29,9 @@ export function ContainerDetailView({ container }: { container: ContainerDetail 
         actions={
           <>
             <ContainerScan className="w-64" />
-            <ReplaceTagDialog containerId={container.id} />
+            <Can permission="containers.manage">
+              <ReplaceTagDialog containerId={container.id} />
+            </Can>
           </>
         }
       />

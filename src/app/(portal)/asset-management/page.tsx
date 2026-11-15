@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
+import { RequirePermission } from "@/components/auth/require-permission";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { AssetManagement } from "@/features/assets/components/asset-management";
 import { getAssetManagement } from "@/features/assets/queries";
@@ -13,7 +14,9 @@ async function Assets() {
 export default function AssetManagementPage() {
   return (
     <Suspense fallback={<PageSkeleton />}>
-      <Assets />
+      <RequirePermission permission="staff.view">
+        <Assets />
+      </RequirePermission>
     </Suspense>
   );
 }

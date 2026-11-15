@@ -7,8 +7,8 @@ import { getOrdersPage } from "@/features/orders/queries";
 export const metadata: Metadata = { title: "Orders" };
 
 async function Orders() {
-  const { orders, options } = await getOrdersPage();
-  return <OrdersTable orders={orders} options={options} />;
+  const { orders, options, external } = await getOrdersPage();
+  return <OrdersTable orders={orders} options={options} external={external} />;
 }
 
 export default function OrdersPage() {

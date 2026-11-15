@@ -24,7 +24,7 @@ export const orderStatusMeta: Record<
 
 export const orderStatuses = Object.keys(orderStatusMeta) as OrderStatus[];
 
-// The groups behind the stat cards on Orders and the Overview.
+// The groups behind the stat cards on Orders.
 export const IN_PROGRESS = new Set<string>([
   "APPROVED",
   "PACKING",

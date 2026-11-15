@@ -1,13 +1,16 @@
 import type { Route } from "next";
 import {
   Boxes,
+  Container,
   Package,
   ScanBarcode,
   TriangleAlert,
   Truck,
+  Users,
   Warehouse,
   type LucideIcon,
 } from "lucide-react";
+import type { Permission } from "@/lib/permissions";
 
 export type NavChild = { title: string; href: Route };
 
@@ -16,6 +19,8 @@ export type NavItem = {
   href: Route;
   icon: LucideIcon;
   children?: NavChild[];
+  // Shown only to roles with this permission.
+  permission?: Permission;
 };
 
 // Sub-sections of Containers are views of one page, selected with ?view=.
@@ -33,24 +38,34 @@ export const mainNav: NavItem[] = [
     title: "Inventory",
     href: "/inventory",
     icon: Warehouse,
+    permission: "staff.view",
     children: [
       { title: "Products", href: "/inventory/assets" },
       { title: "Stock Movements", href: "/inventory/movements" },
       { title: "Locations", href: "/inventory/stations" },
     ],
   },
-  { title: "Containers", href: "/assets", icon: Boxes, children: containerNavChildren },
+  {
+    title: "Containers",
+    href: "/assets",
+    icon: Boxes,
+    permission: "staff.view",
+    children: containerNavChildren,
+  },
+  { title: "My containers", href: "/my-containers", icon: Container, permission: "containers.mine" },
   {
     title: "Asset Management",
     href: "/asset-management",
     icon: ScanBarcode,
+    permission: "staff.view",
     children: [
       { title: "Registry", href: "/asset-management" },
       { title: "By station", href: "/asset-management?view=stations" },
     ],
   },
-  { title: "Deliveries", href: "/deliveries", icon: Truck },
-  { title: "Exceptions", href: "/exceptions", icon: TriangleAlert },
+  { title: "Deliveries", href: "/deliveries", icon: Truck, permission: "deliveries.view" },
+  { title: "Exceptions", href: "/exceptions", icon: TriangleAlert, permission: "exceptions.view" },
+  { title: "Users", href: "/users", icon: Users, permission: "users.manage" },
 ];
 
 export function isActivePath(pathname: string, href: string) {
@@ -79,7 +94,10 @@ export function breadcrumbsFor(
   pathname: string,
   view: string | null = null,
 ): { title: string; href: string; dynamic: boolean }[] {
-  const titles = new Map<string, string>();
+  const titles = new Map<string, string>([
+    ["/account", "Account"],
+    ["/notifications", "Notifications"],
+  ]);
   for (const item of mainNav) {
     titles.set(item.href, item.title);
     for (const child of item.children ?? []) {

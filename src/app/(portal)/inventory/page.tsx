@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { buttonClass } from "@/components/ui/button";
 import { Card, CardHeader, EmptyState, ItemCard, ItemGrid } from "@/components/ui/card";
 import { Page, PageHeader, Stat, StatGrid } from "@/components/ui/page";
+import { RequirePermission } from "@/components/auth/require-permission";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { BadgeCell, Cell, Table, Td, Th } from "@/components/ui/table";
 import {
@@ -181,7 +182,9 @@ async function Overview() {
 export default function InventoryPage() {
   return (
     <Suspense fallback={<PageSkeleton />}>
-      <Overview />
+      <RequirePermission permission="staff.view">
+        <Overview />
+      </RequirePermission>
     </Suspense>
   );
 }

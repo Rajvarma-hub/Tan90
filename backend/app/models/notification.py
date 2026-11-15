@@ -34,3 +34,17 @@ class Notification(Base):
 
     read_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+class NotificationRead(Base):
+    """One person has read one notification.
+
+    Role-wide notifications reach many people, so "read" is kept per person rather than on the
+    notification itself.
+    """
+    __tablename__ = "notification_reads"
+
+    notification_id: Mapped[str] = mapped_column(
+        String, ForeignKey("notifications.id"), primary_key=True)
+    user_id: Mapped[str] = mapped_column(String, ForeignKey("users.id"), primary_key=True)
+    read_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

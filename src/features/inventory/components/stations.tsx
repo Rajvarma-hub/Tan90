@@ -1,5 +1,6 @@
 "use client";
 
+import { Can, useCan } from "@/components/auth/user-context";
 import { useState } from "react";
 import { Box, Layers, MapPin, Package, Plus, Snowflake, Warehouse } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -8,7 +9,7 @@ import { Card, CardHeader, EmptyState, ItemCard, ItemGrid } from "@/components/u
 import { Dialog, DialogActions } from "@/components/ui/dialog";
 import { Field, FormError, Input, Select } from "@/components/ui/form";
 import { Page, PageHeader, Stat, StatGrid, Toolbar } from "@/components/ui/page";
-import { createStation } from "@/features/inventory/actions";
+import { createStation, updateStation } from "@/features/inventory/actions";
 import type { StationSummary } from "@/features/inventory/types";
 import { useServerAction } from "@/hooks/use-server-action";
 import { formatNumber } from "@/lib/format";
@@ -97,9 +98,63 @@ function AddStationDialog() {
   );
 }
 
+function EditStationDialog({
+  station,
+  onClose,
+}: {
+  station: StationSummary;
+  onClose: () => void;
+}) {
+  const [name, setName] = useState(station.name);
+  const [address, setAddress] = useState(station.address ?? "");
+  const [isActive, setIsActive] = useState(station.is_active);
+  const { run, pending, error } = useServerAction(updateStation, onClose);
+
+  return (
+    <Dialog open onClose={onClose} title="Edit Location" description={station.code}>
+      <form
+        className="grid gap-4"
+        onSubmit={(event) => {
+          event.preventDefault();
+          run({ id: station.id, name, address: address || null, isActive });
+        }}
+      >
+        <Field label="Name">
+          <Input required maxLength={200} value={name} onChange={(event) => setName(event.target.value)} />
+        </Field>
+        <Field label="Address">
+          <Input maxLength={500} value={address} onChange={(event) => setAddress(event.target.value)} />
+        </Field>
+        <label className="flex items-start gap-3 text-sm">
+          <input
+            type="checkbox"
+            className="mt-0.5 size-4 accent-primary"
+            checked={isActive}
+            onChange={(event) => setIsActive(event.target.checked)}
+          />
+          <span>
+            <span className="font-medium text-card-foreground">Online</span>
+            <span className="block text-xs text-muted-foreground">
+              Mark a location offline when it is closed. Its stock, containers and orders stay as they are.
+            </span>
+          </span>
+        </label>
+        <FormError message={error} />
+        <DialogActions onCancel={onClose}>
+          <Button type="submit" disabled={pending}>
+            {pending ? "Saving…" : "Save"}
+          </Button>
+        </DialogActions>
+      </form>
+    </Dialog>
+  );
+}
+
 export function Stations({ stations }: { stations: StationSummary[] }) {
   const [search, setSearch] = useState("");
   const [kind, setKind] = useState("");
+  const [editing, setEditing] = useState<StationSummary | null>(null);
+  const canEdit = useCan()("catalog.manage");
 
   const term = search.trim().toLowerCase();
   const shown = stations.filter(
@@ -117,7 +172,11 @@ export function Stations({ stations }: { stations: StationSummary[] }) {
       <PageHeader
         title="Locations"
         description="Stock, free containers and open orders at every location."
-        actions={<AddStationDialog />}
+        actions={
+          <Can permission="catalog.manage">
+            <AddStationDialog />
+          </Can>
+        }
       />
 
       <StatGrid>
@@ -188,6 +247,18 @@ export function Stations({ stations }: { stations: StationSummary[] }) {
                   },
                   { label: "Open orders", value: station.openOrders },
                 ]}
+                footer={
+                  canEdit ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => setEditing(station)}
+                    >
+                      Edit
+                    </Button>
+                  ) : undefined
+                }
               >
                 <p className="flex gap-2">
                   <MapPin className="mt-0.5 size-4 shrink-0" />
@@ -198,6 +269,7 @@ export function Stations({ stations }: { stations: StationSummary[] }) {
           </ItemGrid>
         )}
       </Card>
+      {editing && <EditStationDialog key={editing.id} station={editing} onClose={() => setEditing(null)} />}
     </Page>
   );
 }

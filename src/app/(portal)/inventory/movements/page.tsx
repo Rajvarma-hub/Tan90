@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
+import { RequirePermission } from "@/components/auth/require-permission";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { Movements } from "@/features/inventory/components/movements";
 import { getMovements, getProducts, getStations } from "@/features/inventory/queries";
@@ -18,7 +19,9 @@ async function MovementList() {
 export default function MovementsPage() {
   return (
     <Suspense fallback={<PageSkeleton />}>
-      <MovementList />
+      <RequirePermission permission="staff.view">
+        <MovementList />
+      </RequirePermission>
     </Suspense>
   );
 }

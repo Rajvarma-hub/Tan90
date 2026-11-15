@@ -88,6 +88,8 @@ def get_dispatch(
     d = db.get(Dispatch, dispatch_id)
     if not d:
         raise HTTPException(404, "Dispatch not found")
+    if user.role == "CUSTOMER" or (user.role == "DRIVER" and d.driver_id != user.id):
+        raise HTTPException(403, "Insufficient permissions")
 
     items = db.query(DispatchItem).filter(DispatchItem.dispatch_id == d.id).all()
     containers = []

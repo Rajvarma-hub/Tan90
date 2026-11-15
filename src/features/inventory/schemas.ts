@@ -6,6 +6,15 @@ export const createProductSchema = z.object({
   sku: z.string().trim().min(2).max(64),
   name: z.string().trim().min(1).max(200),
   setpointC: z.number().min(-100).max(100).nullable(),
+  reorderLevel: z.number().int().min(0).max(1_000_000),
+});
+
+export const updateProductSchema = z.object({
+  id,
+  name: z.string().trim().min(1, "Enter a name").max(200),
+  setpointC: z.number().min(-100).max(100).nullable(),
+  reorderLevel: z.number().int().min(0).max(1_000_000),
+  isActive: z.boolean(),
 });
 
 export const recordMovementSchema = z.object({
@@ -21,6 +30,13 @@ export const recordMovementSchema = z.object({
   quantity: z.number().int().min(1).max(1_000_000),
   toLocationId: id.nullable(),
   reference: z.string().trim().max(120).nullable(),
+});
+
+export const updateStationSchema = z.object({
+  id,
+  name: z.string().trim().min(1, "Enter a name").max(200),
+  address: z.string().trim().max(500).nullable(),
+  isActive: z.boolean(),
 });
 
 export const createStationSchema = z.object({

@@ -49,7 +49,7 @@ def create_product(
     p = Product(
         sku=payload.sku, name=payload.name,
         setpoint_c=payload.setpoint_c, unit=payload.unit,
-        is_active=True,
+        is_active=True, reorder_level=payload.reorder_level,
     )
     db.add(p)
     db.flush()
@@ -72,7 +72,9 @@ def update_product(
     p = db.get(Product, product_id)
     if not p:
         raise HTTPException(404, "Product not found")
-    changed = payload.model_dump(exclude_unset=True)
+    # An explicit null only makes sense for the setpoint; the other fields must keep a value.
+    changed = {k: v for k, v in payload.model_dump(exclude_unset=True).items()
+               if v is not None or k == "setpoint_c"}
     for k, v in changed.items():
         setattr(p, k, v)
     db.add(AuditLog(

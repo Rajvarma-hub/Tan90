@@ -6,7 +6,7 @@ from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
 from app.core.container_types import CONTAINER_TYPES, resolve as resolve_type
-from app.core.deps import get_current_user, require_roles
+from app.core.deps import get_current_user, require_roles, require_staff
 from app.core.order_states import InvalidContainerTransition, check_container_transition
 from app.db.session import get_db
 from app.models.audit import AuditLog, ContainerMovement
@@ -315,11 +315,9 @@ def restore_container(
 # Fixed paths MUST come before /{container_id} so FastAPI does not treat them as an ID.
 
 @router.get("/summary")
-def container_summary(user: User = Depends(get_current_user),
+def container_summary(user: User = Depends(require_staff),
                       db: Session = Depends(get_db)):
     """Counts by status, overall and per location — the 'what is in, what is out' view."""
-    if user.role == "CUSTOMER":
-        raise HTTPException(403, "Insufficient permissions")
     by_status: dict[str, int] = {}
     for status, count in db.query(
             Container.status, func.count(Container.id)).group_by(Container.status).all():
@@ -331,11 +329,9 @@ def container_summary(user: User = Depends(get_current_user),
 
 
 @router.get("/lookup", response_model=ContainerOut)
-def lookup_container(code: str, user: User = Depends(get_current_user),
+def lookup_container(code: str, user: User = Depends(require_staff),
                      db: Session = Depends(get_db)):
     """Resolve a scan — RFID tag ID or the container code on the barcode label."""
-    if user.role == "CUSTOMER":
-        raise HTTPException(403, "Insufficient permissions")
     c = resolve_scan(db, code)
     if not c:
         raise HTTPException(404, f"No container matches '{code.strip()}'")
@@ -360,7 +356,7 @@ def list_containers(
     location_id: str | None = None,
     type_code: str | None = None,
     include_retired: bool = False,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_staff),
     db: Session = Depends(get_db),
 ):
     q = db.query(Container)
@@ -387,7 +383,7 @@ def list_containers(
 
 
 @router.get("/{container_id}", response_model=ContainerOut)
-def get_container(container_id: str, user: User = Depends(get_current_user),
+def get_container(container_id: str, user: User = Depends(require_staff),
                   db: Session = Depends(get_db)):
     c = db.get(Container, container_id)
     if not c:
@@ -396,7 +392,7 @@ def get_container(container_id: str, user: User = Depends(get_current_user),
 
 
 @router.get("/{container_id}/history")
-def container_history(container_id: str, user: User = Depends(get_current_user),
+def container_history(container_id: str, user: User = Depends(require_staff),
                       db: Session = Depends(get_db)):
     c = db.get(Container, container_id)
     if not c:
@@ -414,11 +410,9 @@ def container_history(container_id: str, user: User = Depends(get_current_user),
 
 
 @router.get("/{container_id}/detail")
-def container_detail(container_id: str, user: User = Depends(get_current_user),
+def container_detail(container_id: str, user: User = Depends(require_staff),
                      db: Session = Depends(get_db)):
     """Container page: where it is, every order it has been on, and its movement log."""
-    if user.role == "CUSTOMER":
-        raise HTTPException(403, "Insufficient permissions")
     c = db.get(Container, container_id)
     if not c:
         raise HTTPException(404, "Container not found")

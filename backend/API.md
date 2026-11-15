@@ -3,7 +3,7 @@
 Base URL: `http://localhost:8001` (the port you start uvicorn on)
 Swagger UI: `http://localhost:8001/docs`
 
-This guide covers all 70 routes. Sections 1 to 52 are the core order flow; sections 53 to 70 are the lookups and asset tools the portal uses. Swagger is generated from the code, so it is always the final word.
+This guide covers all 80 routes. Sections 1 to 52 are the core order flow; sections 53 to 70 are the lookups and asset tools the portal uses; sections 71 to 80 cover sessions, delivery codes, notifications and user management. Swagger is generated from the code, so it is always the final word.
 
 Every endpoint follows the same template:
 - **What** — one-line description
@@ -25,6 +25,17 @@ Every endpoint follows the same template:
 | **Never send `status`** | Every state change is its own endpoint |
 | Error shape | `{ "detail": "message" }` or `{ "detail": { "message": "...", ... } }` |
 
+## Who sees what
+
+| Role | Orders | Containers, stock, customers, users, exceptions |
+|---|---|---|
+| `CUSTOMER` | own company's orders only (`/api/orders`, `/{id}`, `/detail`, `/history`, `/manifest`, `/api/returns`); own containers via `/api/containers/me` | `403` |
+| `DRIVER` | only orders where they are the delivery or return driver, and their own `/api/deliveries` | `403` |
+| Station roles | their own station's orders and stock | scoped to their location |
+| Ops, admins, supply chain | everything | everything their role allows |
+
+A customer never sees a driver's email. `403` means the endpoint is never available to your role; for an order that exists but is not yours you also get `403`.
+
 ## Error codes
 
 | Code | Meaning |
@@ -32,7 +43,8 @@ Every endpoint follows the same template:
 | 200 | OK |
 | 201 | Created |
 | 400 | Bad request / mismatch |
-| 401 | Missing / invalid token |
+| 401 | Missing, invalid, expired or ended session (sign out, password change, role change, deactivation). Used for nothing else |
+| 429 | Too many failed sign-in attempts. `Retry-After` gives the seconds to wait |
 | 403 | Wrong role / wrong scope |
 | 404 | Not found |
 | 409 | State machine violation |
@@ -129,7 +141,7 @@ export interface AdminOverview {
 
 ---
 
-# AUTH (3 endpoints)
+# AUTH (3 endpoints, plus 71 to 73)
 
 ## 1. `POST /api/auth/login` — Get an access token
 
@@ -145,16 +157,19 @@ Exchange email + password for a JWT.
 { "access_token": "eyJhbGci...", "token_type": "bearer" }
 ```
 **Errors**
-- `401` wrong credentials
+- `401` wrong credentials, or the account is inactive
 - `422` missing body field
+- `429` the account is locked after `LOGIN_MAX_FAILURES` (5) wrong passwords in a row, for `LOGIN_LOCKOUT_SECONDS` (15 minutes). Even the right password is refused until then. The fifth wrong attempt itself returns `429`
+
+The token lives `JWT_TTL_SECONDS` (default one hour). Swap it for a fresh one with `POST /api/auth/refresh`. Email is matched case-insensitively.
 
 ---
 
 ## 2. `POST /api/auth/register` — Create a user
 
-Public for CUSTOMER self-signup. Admin-only for internal roles (needs Bearer).
+Public for CUSTOMER self-signup, which always creates a new customer company. Joining an existing company, and every internal role, needs an admin's Bearer token. Only a `SUPER_ADMIN` may create `SUPER_ADMIN` or `OPERATIONS_ADMIN` accounts. Station roles (`FREEZING_STATION_MANAGER`, `PACKING_WORKER`, `WAREHOUSE`) need a `location_id`.
 
-**Roles** — public (CUSTOMER) / `SUPER_ADMIN`, `OPERATIONS_ADMIN` (internal)
+**Roles** — public (new CUSTOMER company) / `SUPER_ADMIN`, `OPERATIONS_ADMIN` (everything else)
 
 **Request — customer with new company**
 ```json
@@ -196,15 +211,16 @@ Public for CUSTOMER self-signup. Admin-only for internal roles (needs Bearer).
   "full_name": "Rajkumar",
   "role": "CUSTOMER",
   "location_id": null,
-  "customer_id": "cust-xyz"
+  "customer_id": "cust-xyz",
+  "customer_name": null
 }
 ```
 
 **Errors**
-- `400` customer signup missing `customer_name`/`customer_id`; unknown role
+- `400` customer signup missing `customer_name`/`customer_id`; unknown role; station role without `location_id`
 - `401` internal role attempted without token
-- `403` non-admin attempted internal role
-- `404` `customer_id` doesn't exist
+- `403` non-admin attempted internal role or joining an existing customer; an Ops admin attempted an admin role
+- `404` `customer_id` or `location_id` doesn't exist
 - `409` email already registered
 - `422` password < 8 chars, empty full_name
 
@@ -226,21 +242,24 @@ Returns the logged-in user's profile.
   "full_name": "Soumalya Mukherjee",
   "role": "SUPER_ADMIN",
   "location_id": null,
-  "customer_id": null
+  "customer_id": null,
+  "customer_name": null
 }
 ```
-**Errors** — `401` missing/invalid token
+`customer_name` is set for customer users. **Errors** — `401` missing/invalid token
 
 ---
 
-# NOTIFICATIONS (2 endpoints)
+# NOTIFICATIONS (2 endpoints, plus 75 and 76)
 
 ## 4. `GET /api/notifications` — My inbox
 
 Returns notifications for the current user (direct + role-scoped).
 
+Read state is kept per person, so one Ops admin reading a role-wide notification does not mark it read for another.
+
 **Roles** — any authenticated
-**Request** — `?unread_only=true` (optional)
+**Request** — `?unread_only=true`, `?limit=100` (1–200) (both optional)
 **Response 200** — `Notification[]`
 ```json
 [
@@ -258,7 +277,7 @@ Returns notifications for the current user (direct + role-scoped).
 ```
 **Errors** — `401`
 
-**`kind` values for UI styling:** `ORDER_CREATED`, `ORDER_APPROVED`, `ORDER_PACKED`, `ORDER_DISPATCHED`, `DRIVER_ASSIGNED`, `DELIVERY_ARRIVED`, `DELIVERY_CONFIRMED`, `DELIVERY_DISPUTED`, `RETURN_REQUESTED`, `RETURN_ASSIGNED`, `RETURN_INBOUND`, `ORDER_CLOSED`
+**`kind` values for UI styling:** `ORDER_CREATED`, `ORDER_APPROVED`, `ORDER_CANCELLED`, `ORDER_PACKED`, `ORDER_DISPATCHED`, `DRIVER_ASSIGNED`, `DELIVERY_ARRIVED`, `DELIVERY_CONFIRMED`, `DELIVERY_DISPUTED`, `RETURN_REQUESTED`, `RETURN_ASSIGNED`, `RETURN_INBOUND`, `ORDER_CLOSED`, `LOW_STOCK`
 
 ---
 
@@ -340,7 +359,7 @@ Sets `read_at` on one notification.
 { "name": "FS Mysore Main", "address": "...", "is_active": false }
 ```
 **Response 200** — `Location`
-**Errors** — `403` wrong role, `404` not found
+**Errors** — `403` wrong role, `404` not found, `409` switching a location off (`is_active: false`) while it still has open orders, stock or containers (the message says how many)
 
 ---
 
@@ -409,10 +428,13 @@ Returns `APPROVED` and `PACKING` orders at that freezing station.
   "sku": "PCM-NEG30",
   "name": "PCM Panel -30 C",
   "setpoint_c": -30.0,
-  "unit": "panel"
+  "unit": "panel",
+  "reorder_level": 100
 }
 ```
-**Response 201** — `Product`
+`reorder_level` (0–1,000,000, default 0) is the total stock at which Ops get a `LOW_STOCK` notification, once, when stock first falls to it. 0 turns the alert off.
+
+**Response 201** — `Product` (includes `reorder_level`)
 **Errors**
 - `403` wrong role
 - `409` SKU exists
@@ -425,8 +447,9 @@ Returns `APPROVED` and `PACKING` orders at that freezing station.
 **Roles** — `SUPER_ADMIN`, `OPERATIONS_ADMIN`
 **Request** — any subset
 ```json
-{ "name": "Renamed", "setpoint_c": 4.5, "is_active": false }
+{ "name": "Renamed", "setpoint_c": 4.5, "reorder_level": 50, "is_active": false }
 ```
+Only `setpoint_c` may be set to `null`; a null name, flag or reorder level is ignored.
 **Response 200** — `Product`
 **Errors** — `403`, `404`
 
@@ -857,15 +880,17 @@ Unlocks the container list before confirm-receipt.
 }
 ```
 **Errors**
-- `401` invalid / expired token
+- `400` wrong or expired code (never `401`: that is reserved for the session)
 - `403` not your order
-- `409` token already used
+- `409` code already used
+
+The code comes from the driver: see `GET /api/orders/{id}/qr`.
 
 ---
 
 ## 37. `POST /api/orders/{id}/confirm-receipt` — Customer confirms delivery
 
-**Every** expected container must be accounted for across `received` / `missing` / `damaged`.
+**Every** expected container must be accounted for across `received` / `missing` / `damaged`. A `CUSTOMER` must have verified the delivery code first (`POST /api/orders/{id}/verify`); Ops can confirm without it.
 
 **Roles** — `CUSTOMER` (own order)
 **Request**
@@ -882,6 +907,7 @@ Unlocks the container list before confirm-receipt.
 - `400` report doesn't cover every container (response has `expected` + `reported`)
 - `403`
 - `404`
+- `409` a customer has not verified the delivery code yet
 
 **Side effects** — `received` → `WITH_CUSTOMER`; `damaged` → `ExceptionRecord`; `missing` → `ExceptionRecord`; notifies Ops
 
@@ -1122,7 +1148,9 @@ Orders at `PENDING_OPS_APPROVAL`.
 
 ---
 
-## 49. `GET /api/admin/activity` — Recent audit log
+## 49. `GET /api/admin/activity` — Recent activity
+
+Order steps (from the order history) merged with changes to containers, products, locations and users (from the audit log), newest first.
 
 **Roles** — `SUPER_ADMIN`, `OPERATIONS_ADMIN`
 **Request** — `?limit=50` (1–500, default 50)
@@ -1130,15 +1158,26 @@ Orders at `PENDING_OPS_APPROVAL`.
 ```json
 [
   {
-    "id": "aud-xyz",
+    "id": "oev-xyz",
     "entity_type": "order",
     "entity_id": "ord-1",
-    "action": "ORDER_CREATED",
+    "entity_label": "ORD-0001",
+    "action": "approve",
     "actor_id": "usr-ops1",
     "occurred_at": "2026-11-07T09:00:00.000Z"
+  },
+  {
+    "id": "aud-abc",
+    "entity_type": "container",
+    "entity_id": "con-000001",
+    "entity_label": null,
+    "action": "CONTAINER_REGISTERED",
+    "actor_id": "usr-fsblr",
+    "occurred_at": "2026-11-07T08:00:00.000Z"
   }
 ]
 ```
+`entity_label` is the order number for orders and `null` otherwise. Order actions are the lowercase step names (`approve`, `dispatch`, ...).
 **Errors**
 - `403`
 - `422` limit out of 1–500
@@ -1369,11 +1408,15 @@ Everything the order page needs in one call, with names resolved.
   "driver": { "id": "usr-driver1", "full_name": "...", "email": "..." },
   "vehicle_ref": "KA-01-AB-1234",
   "return_driver": null,
+  "delivery_verified": false,
+  "task_id": "task-abc",
+  "last_location": { "latitude": 12.97, "longitude": 77.59, "accuracy_m": 9.0,
+                     "recorded_at": "2026-11-07T10:00:00" },
   "history": [ { "id": "oev-1", "action": "create", "from": "—", "to": "PENDING_OPS_APPROVAL",
                  "actor_name": "Ops", "notes": null, "occurred_at": "2026-11-07T09:00:00Z" } ]
 }
 ```
-`customer`, `station`, `packing_session`, `driver` and `return_driver` are `null` when not set yet.
+`customer`, `station`, `packing_session`, `driver` and `return_driver` are `null` when not set yet. `last_location` is the newest point sent through `POST /api/deliveries/{task_id}/gps`, and only while the order is `DISPATCHED`, `IN_TRANSIT` or `ARRIVED`; otherwise `null`. A customer sees no driver email.
 **Errors** — `403` a customer reading another customer's order, `404`
 
 ---
@@ -1571,6 +1614,121 @@ The driver scans the containers; the response says which match. Nothing is chang
 - `409` the dispatch is not `PENDING`, or a container cannot make the move
 
 **Side effects** — `DISPATCHED` moves every container to `IN_TRANSIT_TO_CUSTOMER` and the order to `DISPATCHED`
+
+---
+
+# SESSIONS, DELIVERY CODES, NOTIFICATIONS AND USERS (10 endpoints)
+
+## 71. `POST /api/auth/refresh` — Renew a session
+
+Swaps a still-valid token for a fresh one. The portal does this while someone is active.
+
+**Roles** — any authenticated
+**Request** — no body
+**Response 200** — `{ "access_token": "...", "token_type": "bearer" }`
+**Errors** — `401` the session has ended
+
+---
+
+## 72. `POST /api/auth/logout` — End every session
+
+Raises the user's `token_version`, so every token issued so far stops working, on every device.
+
+**Roles** — any authenticated
+**Response 204**
+**Errors** — `401`
+
+---
+
+## 73. `POST /api/auth/change-password` — Change your own password
+
+**Roles** — any authenticated
+**Request**
+```json
+{ "current_password": "old-one", "new_password": "a-new-password" }
+```
+**Response 200** — a fresh token for this session. Every other session ends.
+**Errors**
+- `400` current password is wrong (counts toward the sign-in lockout)
+- `422` new password is under 8 characters or over 72 bytes
+- `429` the account is locked
+
+---
+
+## 74. `GET /api/orders/{id}/qr` — The delivery code for the customer
+
+What the driver shows when the order is `ARRIVED`. The portal renders it as a QR code that opens `/orders/{id}?code=...`. The code is derived from the token id and the server secret; only its hash is stored.
+
+**Roles** — `DRIVER` (own), `OPERATIONS_ADMIN`, `SUPER_ADMIN`
+**Response 200**
+```json
+{ "token": "abc123...", "expires_at": "2026-11-08T09:00:00", "used": false }
+```
+**Errors** — `403` not your assignment, `404` the code cannot be shown, `409` the driver has not arrived yet
+
+---
+
+## 75. `GET /api/notifications/unread-count` — Bell badge
+
+**Roles** — any authenticated
+**Response 200** — `{ "count": 3 }`
+
+---
+
+## 76. `POST /api/notifications/read-all` — Mark everything read
+
+**Roles** — any authenticated
+**Response 200** — `{ "ok": true, "marked": 3 }`
+
+`POST /api/notifications/{id}/read` returns `404` for a notification that is not addressed to you.
+
+---
+
+## 77. `GET /api/admin/users` — Everyone
+
+**Roles** — `SUPER_ADMIN`, `OPERATIONS_ADMIN`
+**Response 200** — `AdminUser[]`
+```json
+[
+  {
+    "id": "usr-driver1", "email": "driver1@tan90.local", "full_name": "Vikram (BLR)",
+    "role": "DRIVER", "location_id": null, "location_code": null,
+    "customer_id": null, "customer_name": null,
+    "is_active": true, "locked": false
+  }
+]
+```
+
+---
+
+## 78. `PATCH /api/admin/users/{id}` — Edit a user
+
+**Roles** — `SUPER_ADMIN`, `OPERATIONS_ADMIN` (an Ops admin cannot touch or create admin accounts)
+**Request** — any of `full_name`, `role`, `location_id` (null clears it), `is_active`
+**Response 200** — `AdminUser`
+**Errors**
+- `400` unknown role; a customer becoming staff or the reverse; changing your own role or deactivating yourself; a station role without a location
+- `403` only a super admin may manage or grant admin roles
+- `404` user or location not found
+
+Changing the role or deactivating a user ends their sessions.
+
+---
+
+## 79. `POST /api/admin/users/{id}/password` — Reset a password
+
+**Roles** — as #78
+**Request** — `{ "new_password": "at-least-8-chars" }`
+**Response 204** — the user is signed out everywhere and any lock is cleared
+**Errors** — `403`, `404`, `422`
+
+---
+
+## 80. `POST /api/admin/users/{id}/unlock` — Clear a lockout
+
+**Roles** — as #78
+**Response 204**
+**Errors** — `403`, `404`
 
 ---
 

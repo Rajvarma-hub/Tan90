@@ -9,6 +9,7 @@ from app.models.audit import AuditLog
 from app.models.container import Container
 from app.models.customer import Customer
 from app.models.order import Order
+from app.models.order_event import OrderEvent
 from app.models.user import User
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -74,11 +75,24 @@ def activity(
     user: User = Depends(require_roles("SUPER_ADMIN", "OPERATIONS_ADMIN")),
     db: Session = Depends(get_db),
 ):
-    rows = db.query(AuditLog).order_by(
-        AuditLog.occurred_at.desc()
-    ).limit(limit).all()
-    return [
+    """Recent changes, newest first: order steps plus edits to containers, products and stations."""
+    # Order steps are recorded as order events, so the audit rows about orders would repeat them.
+    audit = db.query(AuditLog).filter(AuditLog.entity_type != "order").order_by(
+        AuditLog.occurred_at.desc()).limit(limit).all()
+    steps = db.query(OrderEvent, Order.order_number).join(
+        Order, Order.id == OrderEvent.order_id
+    ).order_by(OrderEvent.occurred_at.desc()).limit(limit).all()
+
+    feed = [
         {"id": r.id, "entity_type": r.entity_type, "entity_id": r.entity_id,
-         "action": r.action, "actor_id": r.actor_id, "occurred_at": r.occurred_at}
-        for r in rows
+         "entity_label": None, "action": r.action, "actor_id": r.actor_id,
+         "occurred_at": r.occurred_at}
+        for r in audit
+    ] + [
+        {"id": e.id, "entity_type": "order", "entity_id": e.order_id,
+         "entity_label": number, "action": e.action, "actor_id": e.actor_id,
+         "occurred_at": e.occurred_at}
+        for e, number in steps
     ]
+    feed.sort(key=lambda row: row["occurred_at"], reverse=True)
+    return feed[:limit]

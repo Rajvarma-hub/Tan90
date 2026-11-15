@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import { useCan } from "@/components/auth/user-context";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogActions } from "@/components/ui/dialog";
@@ -17,6 +18,7 @@ type DialogName =
   | "dispatch"
   | "collect"
   | "confirm"
+  | "verify"
   | "assign"
   | "inspect"
   | null;
@@ -28,11 +30,21 @@ const CONDITIONS = ["OK", "DAMAGED", "CONTAMINATED"] as const;
 export function OrderActions({
   order,
   options,
+  initialCode = "",
 }: {
   order: OrderDetail;
   options: OrderActionOptions;
+  // The delivery code from a scanned QR link, so the customer only has to tap Verify.
+  initialCode?: string;
 }) {
-  const [dialog, setDialog] = useState<DialogName>(null);
+  const can = useCan();
+  // A customer has to check the driver's code before confirming what arrived.
+  const needsVerification = can("delivery.verify") && !order.delivery_verified;
+  const [dialog, setDialog] = useState<DialogName>(
+    initialCode && needsVerification && ["ARRIVED", "DELIVERED"].includes(order.status)
+      ? "verify"
+      : null,
+  );
   const { run, pending, error, clearError } = useServerAction(runOrderAction, () =>
     setDialog(null),
   );
@@ -45,6 +57,7 @@ export function OrderActions({
   const [vehicleRef, setVehicleRef] = useState("");
   const [receipt, setReceipt] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState("");
+  const [code, setCode] = useState(initialCode);
   const [conditions, setConditions] = useState<Record<string, string>>({});
 
   function open(name: DialogName) {
@@ -66,7 +79,7 @@ export function OrderActions({
   switch (order.status) {
     case "PENDING_OPS_APPROVAL":
       hint = "Waiting for Ops to approve and assign a freezing station.";
-      buttons = (
+      buttons = can("orders.approve") && (
         <>
           <Button onClick={() => open("approve")}>Approve Order</Button>
           <Button variant="danger" onClick={() => open("cancel")}>
@@ -79,15 +92,19 @@ export function OrderActions({
       hint = `Approved for ${order.station?.code ?? "the station"}. Start packing when the station is ready.`;
       buttons = (
         <>
-          <Button
-            disabled={pending}
-            onClick={() => act({ action: "start_packing", orderId })}
-          >
-            Start Packing
-          </Button>
-          <Button variant="danger" onClick={() => open("cancel")}>
-            Cancel Order
-          </Button>
+          {can("orders.pack") && (
+            <Button
+              disabled={pending}
+              onClick={() => act({ action: "start_packing", orderId })}
+            >
+              Start Packing
+            </Button>
+          )}
+          {can("orders.approve") && (
+            <Button variant="danger" onClick={() => open("cancel")}>
+              Cancel Order
+            </Button>
+          )}
         </>
       );
       break;
@@ -96,11 +113,13 @@ export function OrderActions({
       break;
     case "PACKED":
       hint = "Packed and ready. Scan the containers onto the vehicle and assign a driver.";
-      buttons = <Button onClick={() => open("dispatch")}>Dispatch Order</Button>;
+      buttons = can("orders.dispatch") && (
+        <Button onClick={() => open("dispatch")}>Dispatch Order</Button>
+      );
       break;
     case "DISPATCHED":
       hint = "Loaded on the vehicle. Mark it departed when the driver leaves the station.";
-      buttons = (
+      buttons = can("orders.transit") && (
         <Button disabled={pending} onClick={() => act({ action: "depart", orderId })}>
           Mark Departed
         </Button>
@@ -108,23 +127,40 @@ export function OrderActions({
       break;
     case "IN_TRANSIT":
       hint = "On the way to the customer.";
-      buttons = (
+      buttons = can("orders.transit") && (
         <Button disabled={pending} onClick={() => act({ action: "arrive", orderId })}>
           Mark Arrived
         </Button>
       );
       break;
     case "ARRIVED":
-      hint = "The driver has arrived at the customer site.";
+      hint = can("delivery.verify")
+        ? order.delivery_verified
+          ? "Delivery verified. Once the driver hands over the containers, confirm what you received."
+          : "The driver has arrived. Scan the code on the driver's screen, or type it in, to verify your delivery."
+        : "The driver has arrived at the customer site. The customer verifies the delivery with the code below.";
       buttons = (
-        <Button disabled={pending} onClick={() => act({ action: "deliver", orderId })}>
-          Mark Delivered
-        </Button>
+        <>
+          {needsVerification && <Button onClick={() => open("verify")}>Verify Delivery</Button>}
+          {can("orders.transit") && (
+            <Button disabled={pending} onClick={() => act({ action: "deliver", orderId })}>
+              Mark Delivered
+            </Button>
+          )}
+        </>
       );
       break;
     case "DELIVERED":
-      hint = "Delivered. Record what the customer received.";
-      buttons = <Button onClick={() => open("confirm")}>Confirm Receipt</Button>;
+      hint = needsVerification
+        ? "Delivered. Verify the delivery with the driver's code, then confirm what you received."
+        : "Delivered. Record what the customer received.";
+      buttons = needsVerification ? (
+        <Button onClick={() => open("verify")}>Verify Delivery</Button>
+      ) : (
+        can("orders.confirm_receipt") && (
+          <Button onClick={() => open("confirm")}>Confirm Receipt</Button>
+        )
+      );
       break;
     case "CUSTOMER_CONFIRMED":
     case "DISPUTED":
@@ -132,7 +168,7 @@ export function OrderActions({
         order.status === "DISPUTED"
           ? "The customer reported missing or damaged containers. Request a return for the containers they hold."
           : "Receipt confirmed. Request a return when the customer is done with the containers.";
-      buttons = (
+      buttons = can("orders.request_return") && (
         <Button
           disabled={pending}
           onClick={() => act({ action: "request_return", orderId })}
@@ -147,21 +183,23 @@ export function OrderActions({
         : "Return requested. Assign a driver for the pickup.";
       buttons = (
         <>
-          {order.return_driver && (
+          {order.return_driver && can("orders.collect_return") && (
             <Button onClick={() => open("collect")}>Collect Containers</Button>
           )}
-          <Button
-            variant={order.return_driver ? "outline" : "primary"}
-            onClick={() => open("assign")}
-          >
-            {order.return_driver ? "Change Driver" : "Assign Return Driver"}
-          </Button>
+          {can("orders.process_return") && (
+            <Button
+              variant={order.return_driver ? "outline" : "primary"}
+              onClick={() => open("assign")}
+            >
+              {order.return_driver ? "Change Driver" : "Assign Return Driver"}
+            </Button>
+          )}
         </>
       );
       break;
     case "RETURN_COLLECTED":
       hint = "Containers are on the way back to the station.";
-      buttons = (
+      buttons = can("orders.process_return") && (
         <Button
           disabled={pending}
           onClick={() => act({ action: "receive_return", orderId })}
@@ -176,7 +214,7 @@ export function OrderActions({
           ? "Containers are back. Inspect each one to close the order."
           : "Inspection found damaged or contaminated containers, so the order stays open for review.";
       buttons =
-        toInspect.length > 0 ? (
+        toInspect.length > 0 && can("orders.process_return") ? (
           <Button onClick={() => open("inspect")}>Inspect &amp; Close</Button>
         ) : null;
       break;
@@ -309,6 +347,35 @@ export function OrderActions({
             />
           </Field>
           {dialogFooter("Dispatch", undefined, scannedCodes.length !== order.containers.length)}
+        </form>
+      </Dialog>
+
+      <Dialog
+        open={dialog === "verify"}
+        onClose={close}
+        title="Verify Delivery"
+        description="Enter the code shown on the driver's screen. Scanning the driver's QR code with your phone fills it in for you."
+      >
+        <form
+          className="grid gap-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            act({ action: "verify_delivery", orderId, code });
+          }}
+        >
+          <Field label="Delivery code">
+            <Input
+              required
+              autoFocus
+              autoComplete="off"
+              spellCheck={false}
+              maxLength={200}
+              className="font-mono"
+              value={code}
+              onChange={(event) => setCode(event.target.value.trim())}
+            />
+          </Field>
+          {dialogFooter("Verify", undefined, !code)}
         </form>
       </Dialog>
 

@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
+import { RequirePermission } from "@/components/auth/require-permission";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { DriverBoard } from "@/features/deliveries/components/driver-board";
 import { getDriverBoard } from "@/features/deliveries/queries";
@@ -13,7 +14,9 @@ async function Board() {
 export default function DeliveriesPage() {
   return (
     <Suspense fallback={<PageSkeleton />}>
-      <Board />
+      <RequirePermission permission="deliveries.view">
+        <Board />
+      </RequirePermission>
     </Suspense>
   );
 }

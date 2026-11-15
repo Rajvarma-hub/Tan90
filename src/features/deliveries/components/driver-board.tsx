@@ -1,5 +1,6 @@
 "use client";
 
+import { Can } from "@/components/auth/user-context";
 import { useState } from "react";
 import Link from "next/link";
 import { PackageCheck, Route, Timer, Truck, Undo2, type LucideIcon } from "lucide-react";
@@ -324,7 +325,9 @@ export function DriverBoard({
                       )}
                     </Td>
                     <Td className="text-center">
-                      <TaskAction task={task} />
+                      <Can permission="orders.transit">
+                        <TaskAction task={task} />
+                      </Can>
                     </Td>
                   </tr>
                 );

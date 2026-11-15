@@ -10,7 +10,9 @@ import type {
 
 export const getBalances = () => backend<StockBalance[]>("/api/inventory");
 
-export const getProducts = () => backend<Product[]>("/api/products");
+// People who edit the catalogue also need the products that were switched off.
+export const getProducts = (includeInactive = false) =>
+  backend<Product[]>(includeInactive ? "/api/products?active_only=false" : "/api/products");
 
 export const getStations = () => backend<Station[]>("/api/stations");
 

@@ -23,6 +23,8 @@ def get_current_user(
     user = db.get(User, payload.get("sub"))
     if not user or not user.is_active:
         raise HTTPException(401, "User not found or inactive")
+    if payload.get("ver", 0) != user.token_version:
+        raise HTTPException(401, "Session ended; sign in again")
     return user
 
 
@@ -32,3 +34,14 @@ def require_roles(*roles: str):
             raise HTTPException(403, "Insufficient permissions")
         return user
     return _dep
+
+
+# Customers and drivers only ever see their own orders and containers. Anything that
+# exposes the wider operation (all containers, stock, other stations' orders) is staff-only.
+EXTERNAL_ROLES = ("CUSTOMER", "DRIVER")
+
+
+def require_staff(user: User = Depends(get_current_user)) -> User:
+    if user.role in EXTERNAL_ROLES:
+        raise HTTPException(403, "Insufficient permissions")
+    return user
