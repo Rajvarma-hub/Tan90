@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -22,4 +22,8 @@ class User(Base):
     location_id: Mapped[str | None] = mapped_column(String, ForeignKey("locations.id"), nullable=True)
     customer_id: Mapped[str | None] = mapped_column(String, ForeignKey("customers.id"), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Raising this number invalidates every token issued earlier (sign out, password change).
+    token_version: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    failed_logins: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    locked_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

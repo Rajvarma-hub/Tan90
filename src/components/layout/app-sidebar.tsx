@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
+import { useCan } from "@/components/auth/user-context";
 import { isActivePath, isChildActive, mainNav } from "@/config/navigation";
 import { siteConfig } from "@/config/site";
 import { cn } from "@/lib/utils";
@@ -19,6 +20,8 @@ export function AppSidebar({
 }) {
   const pathname = usePathname();
   const view = useSearchParams().get("view");
+  const can = useCan();
+  const nav = mainNav.filter((item) => !item.permission || can(item.permission));
 
   return (
     <aside
@@ -68,8 +71,8 @@ export function AppSidebar({
       </div>
 
       <nav aria-label="Main" className="flex-1 overflow-x-hidden overflow-y-auto p-2">
-        <ul className="flex flex-col gap-3">
-          {mainNav.map(({ title, href, icon: Icon, children }) => {
+        <ul className="flex flex-col gap-0">
+          {nav.map(({ title, href, icon: Icon, children }) => {
             const active = isActivePath(pathname, href);
             return (
               <li key={href}>
@@ -79,7 +82,7 @@ export function AppSidebar({
                   title={collapsed ? title : undefined}
                   aria-current={pathname === href ? "page" : undefined}
                   className={cn(
-                    "flex h-9 items-center gap-2.5 rounded-md px-2.5 text-sm outline-none transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-ring",
+                    "flex h-8 items-center gap-2.5 rounded-md px-2.5 text-sm outline-none transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-ring",
                     active && "bg-primary/10 font-medium text-primary hover:bg-primary/15 hover:text-primary",
                     collapsed && "md:w-8 md:px-2",
                   )}
@@ -92,7 +95,7 @@ export function AppSidebar({
                 {children && (
                   <ul
                     className={cn(
-                      "mt-1 ml-4 flex flex-col gap-0.5 border-l pl-2.5",
+                      "my-px ml-4 flex flex-col gap-px border-l pl-2.5",
                       collapsed && "md:hidden",
                     )}
                   >
@@ -105,7 +108,7 @@ export function AppSidebar({
                             onClick={onNavigate}
                             aria-current={childActive ? "page" : undefined}
                             className={cn(
-                              "flex h-7 items-center rounded-md px-2 text-[13px] text-muted-foreground outline-none transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-ring",
+                              "flex h-6 items-center rounded-md px-2 text-[13px] text-muted-foreground outline-none transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-ring",
                               childActive &&
                                 "bg-primary/10 font-medium text-primary hover:bg-primary/15 hover:text-primary",
                             )}

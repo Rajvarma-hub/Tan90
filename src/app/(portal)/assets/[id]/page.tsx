@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
+import { RequirePermission } from "@/components/auth/require-permission";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { ContainerDetailView } from "@/features/containers/components/container-detail-view";
 import { getContainerDetail } from "@/features/containers/queries";
@@ -16,7 +17,9 @@ async function ContainerPageContent({ params }: Pick<Props, "params">) {
 export default function ContainerPage({ params }: Props) {
   return (
     <Suspense fallback={<PageSkeleton />}>
-      <ContainerPageContent params={params} />
+      <RequirePermission permission="staff.view">
+        <ContainerPageContent params={params} />
+      </RequirePermission>
     </Suspense>
   );
 }

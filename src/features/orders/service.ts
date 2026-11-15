@@ -123,6 +123,17 @@ export function dispatchOrder(
   });
 }
 
+export function verifyDelivery(orderId: string, code: string) {
+  return backend(`${orderPath(orderId)}/verify`, { method: "POST", body: { token: code } });
+}
+
+/** The code the driver shows the customer on arrival. */
+export function getDeliveryCode(orderId: string) {
+  return backend<{ token: string; expires_at: string; used: boolean }>(
+    `${orderPath(orderId)}/qr`,
+  );
+}
+
 export async function confirmReceipt(
   orderId: string,
   missing: string[],

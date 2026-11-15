@@ -59,6 +59,10 @@ export async function getContainersPage() {
   };
 }
 
+export async function getMyContainers(): Promise<Container[]> {
+  return backend<Container[]>("/api/containers/me");
+}
+
 export async function getContainerDetail(containerId: string): Promise<ContainerDetail> {
   try {
     const detail = await backend<ContainerDetail>(

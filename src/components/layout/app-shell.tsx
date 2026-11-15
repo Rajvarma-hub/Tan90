@@ -1,12 +1,22 @@
 "use client";
 
 import { Suspense, useState, type ReactNode } from "react";
+import { UserProvider, type CurrentUser } from "@/components/auth/user-context";
 import { AppHeader } from "@/components/layout/app-header";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { BreadcrumbProvider } from "@/components/layout/breadcrumb-label";
+import { LiveRefresh } from "@/components/layout/live-refresh";
 import { cn } from "@/lib/utils";
 
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppShell({
+  user,
+  unreadCount,
+  children,
+}: {
+  user: CurrentUser;
+  unreadCount: number;
+  children: ReactNode;
+}) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -19,33 +29,36 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <BreadcrumbProvider>
-      {/* Sidebar and header read the pathname, which is only known at request time on dynamic routes. */}
-      <Suspense fallback={null}>
-        <AppSidebar
-          collapsed={collapsed}
-          mobileOpen={mobileOpen}
-          onNavigate={() => setMobileOpen(false)}
-        />
-      </Suspense>
-      {mobileOpen && (
-        <div
-          aria-hidden
-          className="fixed inset-0 z-40 bg-black/50 md:hidden"
-          onClick={() => setMobileOpen(false)}
-        />
-      )}
-      <div
-        className={cn(
-          "flex min-h-dvh flex-1 flex-col transition-[padding] duration-200 ease-linear print:pl-0",
-          collapsed ? "md:pl-12" : "md:pl-64",
-        )}
-      >
-        <Suspense fallback={<div className="h-16 shrink-0 border-b" />}>
-          <AppHeader onToggleSidebar={toggleSidebar} />
+    <UserProvider user={user}>
+      <BreadcrumbProvider>
+        <LiveRefresh />
+        {/* Sidebar and header read the pathname, which is only known at request time on dynamic routes. */}
+        <Suspense fallback={null}>
+          <AppSidebar
+            collapsed={collapsed}
+            mobileOpen={mobileOpen}
+            onNavigate={() => setMobileOpen(false)}
+          />
         </Suspense>
-        <main className="flex flex-1 flex-col">{children}</main>
-      </div>
-    </BreadcrumbProvider>
+        {mobileOpen && (
+          <div
+            aria-hidden
+            className="fixed inset-0 z-40 bg-black/50 md:hidden"
+            onClick={() => setMobileOpen(false)}
+          />
+        )}
+        <div
+          className={cn(
+            "flex min-h-dvh flex-1 flex-col transition-[padding] duration-200 ease-linear print:pl-0",
+            collapsed ? "md:pl-12" : "md:pl-64",
+          )}
+        >
+          <Suspense fallback={<div className="h-16 shrink-0 border-b" />}>
+            <AppHeader onToggleSidebar={toggleSidebar} unreadCount={unreadCount} />
+          </Suspense>
+          <main className="flex flex-1 flex-col">{children}</main>
+        </div>
+      </BreadcrumbProvider>
+    </UserProvider>
   );
 }

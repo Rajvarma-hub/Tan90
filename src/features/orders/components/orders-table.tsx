@@ -1,5 +1,6 @@
 "use client";
 
+import { Can } from "@/components/auth/user-context";
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -7,6 +8,7 @@ import { AlertCircle, Clock, Package, PackageCheck, Truck, type LucideIcon } fro
 import type { BadgeTone } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, EmptyState } from "@/components/ui/card";
+import { ExportButton } from "@/components/ui/export-button";
 import { Input, Select } from "@/components/ui/form";
 import { OpenRow } from "@/components/ui/open-row";
 import { Page, PageHeader, Stat, StatGrid, Toolbar } from "@/components/ui/page";
@@ -29,9 +31,12 @@ const inGroup: Record<Exclude<Group, "">, (status: string) => boolean> = {
 export function OrdersTable({
   orders,
   options,
+  external,
 }: {
   orders: OrderSummary[];
   options: OrderFormOptions;
+  // A customer or driver: sees only their own orders, without station or customer filters.
+  external: boolean;
 }) {
   const router = useRouter();
   const [search, setSearch] = useState("");
@@ -80,8 +85,33 @@ export function OrdersTable({
     <Page>
       <PageHeader
         title="Orders"
-        description="Track every order from placement to return."
-        actions={<NewOrderDialog options={options} />}
+        description={
+          external
+            ? "Your orders, from placement to return."
+            : "Track every order from placement to return."
+        }
+        actions={
+          <>
+            <ExportButton
+              filename="orders"
+              headers={["Order", "Customer", "Destination", "Station", "Status", "Quantity", "Products", "Placed", "Expected delivery"]}
+              rows={filtered.map((o) => [
+                o.orderNumber,
+                o.customerName,
+                o.destination,
+                o.stationCode,
+                orderStatusMeta[o.status].label,
+                o.totalQuantity,
+                o.itemCount,
+                o.createdAt,
+                o.expectedDeliveryAt,
+              ])}
+            />
+            <Can permission="orders.create">
+              <NewOrderDialog options={options} ownCompany={external} />
+            </Can>
+          </>
+        }
       />
 
       <StatGrid>
@@ -108,22 +138,24 @@ export function OrdersTable({
             setPage(1);
           }}
         />
-        <Select
-          className="w-48"
-          aria-label="Customer"
-          value={customerId}
-          onChange={(event) => {
-            setCustomerId(event.target.value);
-            setPage(1);
-          }}
-        >
-          <option value="">All customers</option>
-          {options.customers.map((customer) => (
-            <option key={customer.id} value={customer.id}>
-              {customer.label}
-            </option>
-          ))}
-        </Select>
+        {!external && (
+          <Select
+            className="w-48"
+            aria-label="Customer"
+            value={customerId}
+            onChange={(event) => {
+              setCustomerId(event.target.value);
+              setPage(1);
+            }}
+          >
+            <option value="">All customers</option>
+            {options.customers.map((customer) => (
+              <option key={customer.id} value={customer.id}>
+                {customer.label}
+              </option>
+            ))}
+          </Select>
+        )}
         <Select
           className="w-48"
           aria-label="Status"
@@ -164,8 +196,8 @@ export function OrdersTable({
           <thead>
             <tr>
               <Th>Order</Th>
-              <Th>Customer and destination</Th>
-              <Th className="text-center">Station</Th>
+              <Th>{external ? "Destination" : "Customer and destination"}</Th>
+              {!external && <Th className="text-center">Station</Th>}
               <Th className="text-center">Status</Th>
               <Th className="text-center">Quantity</Th>
               <Th className="text-center">Expected delivery</Th>
@@ -193,17 +225,23 @@ export function OrdersTable({
                   </Cell>
                 </Td>
                 <Td>
-                  <Cell main={order.customerName}>
-                    <span>{order.destination ?? "No destination"}</span>
-                  </Cell>
-                </Td>
-                <Td className="text-center">
-                  {order.stationCode ?? (
-                    <span className="inline-flex items-center gap-1.5 text-red-400">
-                      <AlertCircle className="size-4" /> Not assigned
-                    </span>
+                  {external ? (
+                    (order.destination ?? "No destination")
+                  ) : (
+                    <Cell main={order.customerName}>
+                      <span>{order.destination ?? "No destination"}</span>
+                    </Cell>
                   )}
                 </Td>
+                {!external && (
+                  <Td className="text-center">
+                    {order.stationCode ?? (
+                      <span className="inline-flex items-center gap-1.5 text-red-400">
+                        <AlertCircle className="size-4" /> Not assigned
+                      </span>
+                    )}
+                  </Td>
+                )}
                 <Td className="text-center">
                   <OrderStatusBadge status={order.status} />
                 </Td>

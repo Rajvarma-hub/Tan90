@@ -10,6 +10,7 @@ Every role sees realistic data on login:
 
 Idempotent: no-op if users already exist.
 """
+import hashlib
 import json
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
@@ -220,12 +221,13 @@ def step_arrive(db, order, task, actor, at):
     order.status = "ARRIVED"
     order.arrived_at = at
     _oe(db, order, "arrive", "IN_TRANSIT", "ARRIVED", actor, at)
-    # QR token
-    import hashlib
-    token = f"demo-token-{order.id}"
+    # Delivery code the customer verifies on arrival; see order_flow.qr_secret.
+    from app.services.order_flow import qr_secret
+    qr_id = f"qr-{order.id}"
     db.add(QRToken(
+        id=qr_id,
         order_id=order.id,
-        token_hash=hashlib.sha256(token.encode()).hexdigest(),
+        token_hash=hashlib.sha256(qr_secret(qr_id).encode()).hexdigest(),
         expires_at=at + timedelta(days=7),
     ))
 
@@ -332,7 +334,7 @@ def step_inspect(db, order, ret, conditions, station_id, actor, at):
         if cond != "OK":
             all_ok = False
         db.add(ReturnInspection(
-            return_id=ret.id, container_id=c.id,
+            return_id=order.id, container_id=c.id,
             condition=cond, contains_panels=False,
             inspected_by=actor, inspected_at=at,
         ))
@@ -455,11 +457,11 @@ def seed_reference(db: Session):
 
     db.add_all([
         Product(id="prd-pcm-neg50", sku="PCM-NEG50",
-                name="PCM Panel -50 C (Ultra-cold Vaccine)", setpoint_c=-50.0),
+                name="PCM Panel -50 C (Ultra-cold Vaccine)", setpoint_c=-50.0, reorder_level=150),
         Product(id="prd-pcm-neg30", sku="PCM-NEG30",
                 name="PCM Panel -30 C (Seafood)", setpoint_c=-30.0),
         Product(id="prd-pcm-neg24", sku="PCM-NEG24",
-                name="PCM Panel -24 C (Frozen)", setpoint_c=-24.0),
+                name="PCM Panel -24 C (Frozen)", setpoint_c=-24.0, reorder_level=50),
         Product(id="prd-pcm-neg18", sku="PCM-NEG18",
                 name="PCM Panel -18 C (Deep Chilled)", setpoint_c=-18.0),
         Product(id="prd-pcm-neg10", sku="PCM-NEG10",
@@ -469,7 +471,7 @@ def seed_reference(db: Session):
         Product(id="prd-pcm-pos2", sku="PCM-POS2",
                 name="PCM Panel +2 C (Legacy)", setpoint_c=2.0, is_active=False),
         Product(id="prd-pcm-pos5", sku="PCM-POS5",
-                name="PCM Panel +5 C (Pharma 2-8 C)", setpoint_c=5.0),
+                name="PCM Panel +5 C (Pharma 2-8 C)", setpoint_c=5.0, reorder_level=40),
         Product(id="prd-bag-lastmile", sku="BAG-LASTMILE",
                 name="Last Mile Delivery Bag", setpoint_c=5.0, unit="bag"),
         Product(id="prd-pcm-pos15", sku="PCM-POS15",
@@ -514,6 +516,7 @@ def seed_containers(db: Session):
                     status="AVAILABLE", current_location_id=loc_id,
                     created_at=ago(days=age),
                 ))
+                db.flush()  # the tag and movement below reference this row
                 db.add(RFIDTag(id=f"tag-{n:06d}", epc=epc_for(n),
                                container_id=cid, active=True,
                                created_at=ago(days=age)))
@@ -525,6 +528,7 @@ def seed_containers(db: Session):
                      container_type=type_name, capacity_litres=capacity,
                      status="AVAILABLE", current_location_id="loc-fs-blr",
                      created_at=ago(days=3)))
+    db.flush()
     _register(db, "con-000061", "loc-fs-blr", 3)
 
     # con-000062 had its tag replaced: old tag inactive, new tag active.
@@ -532,6 +536,7 @@ def seed_containers(db: Session):
                      container_type=type_name, capacity_litres=capacity,
                      status="AVAILABLE", current_location_id="loc-fs-blr",
                      created_at=ago(days=30)))
+    db.flush()
     _register(db, "con-000062", "loc-fs-blr")
     db.add(RFIDTag(id="tag-000062-old", epc=epc_for(9062), container_id="con-000062",
                    active=False, created_at=ago(days=30), replaced_at=ago(days=6)))
@@ -543,6 +548,7 @@ def seed_containers(db: Session):
                      container_type=type_name, capacity_litres=capacity,
                      status="RETIRED", current_location_id="loc-fs-chn",
                      created_at=ago(days=60)))
+    db.flush()
     _register(db, "con-000063", "loc-fs-chn", 60)
     db.add(RFIDTag(id="tag-000063", epc=epc_for(63), container_id="con-000063",
                    active=False, created_at=ago(days=60), replaced_at=ago(days=8)))

@@ -1,11 +1,13 @@
 import json
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user, require_roles
 from app.db.session import get_db
 from app.models.container import Container
+from app.models.delivery import DeliveryTask, GPSEvent
 from app.models.dispatch import Dispatch
 from app.models.order import Order
 from app.models.order_event import OrderEvent
@@ -21,6 +23,18 @@ from app.services import order_flow
 from app.services.scan import to_epcs
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
+
+
+def _visible_order(db: Session, order_id: str, user: User) -> Order:
+    """The order, or 404/403. Customers see their own; drivers see what they are assigned."""
+    order = db.get(Order, order_id)
+    if not order:
+        raise HTTPException(404, "Order not found")
+    if user.role == "CUSTOMER" and order.customer_id != user.customer_id:
+        raise HTTPException(403, "Access denied")
+    if user.role == "DRIVER" and user.id not in (order.driver_id, order.return_driver_id):
+        raise HTTPException(403, "Access denied")
+    return order
 
 
 # ─── Create / read ─────────────────────────────────────────────
@@ -49,6 +63,8 @@ def list_orders(
     q = db.query(Order)
     if user.role == "CUSTOMER":
         q = q.filter(Order.customer_id == user.customer_id)
+    elif user.role == "DRIVER":
+        q = q.filter(or_(Order.driver_id == user.id, Order.return_driver_id == user.id))
     elif user.role in ("FREEZING_STATION_MANAGER", "PACKING_WORKER"):
         q = q.filter(Order.station_id == user.location_id)
     if status:
@@ -59,22 +75,13 @@ def list_orders(
 @router.get("/{order_id}", response_model=OrderOut)
 def get_order(order_id: str, user: User = Depends(get_current_user),
               db: Session = Depends(get_db)):
-    order = db.get(Order, order_id)
-    if not order:
-        raise HTTPException(404, "Order not found")
-    if user.role == "CUSTOMER" and order.customer_id != user.customer_id:
-        raise HTTPException(403, "Access denied")
-    return order
+    return _visible_order(db, order_id, user)
 
 
 @router.get("/{order_id}/history")
 def order_history(order_id: str, user: User = Depends(get_current_user),
                   db: Session = Depends(get_db)):
-    order = db.get(Order, order_id)
-    if not order:
-        raise HTTPException(404, "Order not found")
-    if user.role == "CUSTOMER" and order.customer_id != user.customer_id:
-        raise HTTPException(403, "Access denied")
+    _visible_order(db, order_id, user)
     rows = db.query(OrderEvent).filter(
         OrderEvent.order_id == order_id
     ).order_by(OrderEvent.occurred_at).all()
@@ -121,6 +128,14 @@ def deliver(order_id: str,
             user: User = Depends(require_roles("DRIVER", "SUPER_ADMIN", "OPERATIONS_ADMIN")),
             db: Session = Depends(get_db)):
     return order_flow.deliver(db, order_id, user)
+
+
+@router.get("/{order_id}/qr")
+def delivery_code(order_id: str,
+                  user: User = Depends(require_roles("DRIVER", "SUPER_ADMIN", "OPERATIONS_ADMIN")),
+                  db: Session = Depends(get_db)):
+    """The code the driver shows the customer on arrival (rendered as a QR in the portal)."""
+    return order_flow.delivery_code(db, order_id, user)
 
 
 @router.post("/{order_id}/verify")
@@ -207,11 +222,7 @@ def inspect_and_close(order_id: str, payload: InspectAndCloseIn,
 @router.get("/{order_id}/manifest")
 def get_manifest(order_id: str, user: User = Depends(get_current_user),
                  db: Session = Depends(get_db)):
-    order = db.get(Order, order_id)
-    if not order:
-        raise HTTPException(404, "Order not found")
-    if user.role == "CUSTOMER" and order.customer_id != user.customer_id:
-        raise HTTPException(403, "Access denied")
+    order = _visible_order(db, order_id, user)
     session = db.query(PackingSession).filter(
         PackingSession.order_id == order_id
     ).order_by(PackingSession.created_at.desc()).first()
@@ -247,18 +258,18 @@ def order_detail(order_id: str, user: User = Depends(get_current_user),
     from app.models.location import Location
     from app.models.product import Product
 
-    order = db.get(Order, order_id)
-    if not order:
-        raise HTTPException(404, "Order not found")
-    if user.role == "CUSTOMER" and order.customer_id != user.customer_id:
-        raise HTTPException(403, "Access denied")
+    order = _visible_order(db, order_id, user)
 
     customer = db.get(Customer, order.customer_id)
     station = db.get(Location, order.station_id) if order.station_id else None
 
     def person(uid: str | None):
         u = db.get(User, uid) if uid else None
-        return {"id": u.id, "full_name": u.full_name, "email": u.email} if u else None
+        if not u:
+            return None
+        # A customer sees who is coming, not that person's email.
+        return {"id": u.id, "full_name": u.full_name,
+                "email": None if user.role == "CUSTOMER" else u.email}
 
     items = []
     for it in order.items:
@@ -291,6 +302,18 @@ def order_detail(order_id: str, user: User = Depends(get_current_user),
         Dispatch.order_id == order_id
     ).order_by(Dispatch.confirmed_at.desc()).first()
 
+    task = last_location = None
+    if dispatch:
+        task = db.query(DeliveryTask).filter(
+            DeliveryTask.dispatch_id == dispatch.id).order_by(DeliveryTask.created_at.desc()).first()
+    # Where the vehicle is matters only while it is on the road.
+    if task and order.status in ("DISPATCHED", "IN_TRANSIT", "ARRIVED"):
+        fix = db.query(GPSEvent).filter(GPSEvent.task_id == task.id).order_by(
+            GPSEvent.recorded_at.desc()).first()
+        if fix:
+            last_location = {"latitude": fix.latitude, "longitude": fix.longitude,
+                             "accuracy_m": fix.accuracy_m, "recorded_at": fix.recorded_at}
+
     events = db.query(OrderEvent).filter(
         OrderEvent.order_id == order_id).order_by(OrderEvent.occurred_at).all()
     actor_names = {
@@ -318,6 +341,9 @@ def order_detail(order_id: str, user: User = Depends(get_current_user),
         "driver": person(order.driver_id),
         "vehicle_ref": dispatch.vehicle_ref if dispatch else None,
         "return_driver": person(order.return_driver_id),
+        "delivery_verified": order_flow.is_delivery_verified(db, order_id),
+        "task_id": task.id if task else None,
+        "last_location": last_location,
         "history": [
             {"id": e.id, "action": e.action, "from": e.from_status, "to": e.to_status,
              "actor_name": actor_names.get(e.actor_id), "notes": e.notes,

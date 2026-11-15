@@ -1,5 +1,6 @@
 "use client";
 
+import { Can } from "@/components/auth/user-context";
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -9,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader, EmptyState } from "@/components/ui/card";
 import { Input, Select } from "@/components/ui/form";
 import { OpenRow } from "@/components/ui/open-row";
+import { ExportButton } from "@/components/ui/export-button";
 import { Page, PageHeader, Stat, StatGrid, Toolbar } from "@/components/ui/page";
 import { paginate, Pagination } from "@/components/ui/pagination";
 import { Cell, Dash, rowAccent, Table, Td, Th } from "@/components/ui/table";
@@ -144,8 +146,23 @@ export function ContainerList({
         description="Containers tracked by RFID tag and barcode label."
         actions={
           <>
+            <ExportButton
+              filename="containers"
+              headers={["Code", "Tag", "Type", "Status", "Location", "Customer", "Order"]}
+              rows={filtered.map((c) => [
+                c.container_code,
+                c.epc,
+                c.container_type,
+                c.status,
+                c.location_code,
+                c.customer_name,
+                c.current_order?.order_number,
+              ])}
+            />
             <ContainerScan className="w-64" />
-            <RegisterDialog types={types} stations={stations} />
+            <Can permission="containers.register">
+              <RegisterDialog types={types} stations={stations} />
+            </Can>
           </>
         }
       />

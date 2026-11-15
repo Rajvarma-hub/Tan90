@@ -1,5 +1,6 @@
 "use client";
 
+import { Can } from "@/components/auth/user-context";
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
@@ -253,7 +254,9 @@ export function AssetRegistry({
                     </Td>
                   )}
                   <Td className="text-center">
-                    <AssetActions asset={asset} types={types} stations={stations} />
+                    <Can permission="containers.manage">
+                      <AssetActions asset={asset} types={types} stations={stations} />
+                    </Can>
                   </Td>
                 </tr>
               );

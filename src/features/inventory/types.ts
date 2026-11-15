@@ -37,6 +37,8 @@ export type Product = {
   setpoint_c: number | null;
   unit: string;
   is_active: boolean;
+  // Ops are alerted when total stock falls to this. 0 means no alert.
+  reorder_level: number;
 };
 
 export type Station = {

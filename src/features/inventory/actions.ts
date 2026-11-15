@@ -4,6 +4,8 @@ import {
   createProductSchema,
   createStationSchema,
   recordMovementSchema,
+  updateProductSchema,
+  updateStationSchema,
 } from "@/features/inventory/schemas";
 import { createAction } from "@/server/action";
 import { backend } from "@/server/backend";
@@ -11,7 +13,12 @@ import { backend } from "@/server/backend";
 export const createProduct = createAction(createProductSchema, async (input) => {
   await backend("/api/products", {
     method: "POST",
-    body: { sku: input.sku, name: input.name, setpoint_c: input.setpointC },
+    body: {
+      sku: input.sku,
+      name: input.name,
+      setpoint_c: input.setpointC,
+      reorder_level: input.reorderLevel,
+    },
   });
   return null;
 });
@@ -42,6 +49,27 @@ export const createStation = createAction(createStationSchema, async (input) => 
       kind: input.kind,
       address: input.address || null,
     },
+  });
+  return null;
+});
+
+export const updateProduct = createAction(updateProductSchema, async (input) => {
+  await backend(`/api/products/${encodeURIComponent(input.id)}`, {
+    method: "PATCH",
+    body: {
+      name: input.name,
+      setpoint_c: input.setpointC,
+      reorder_level: input.reorderLevel,
+      is_active: input.isActive,
+    },
+  });
+  return null;
+});
+
+export const updateStation = createAction(updateStationSchema, async (input) => {
+  await backend(`/api/stations/${encodeURIComponent(input.id)}`, {
+    method: "PATCH",
+    body: { name: input.name, address: input.address, is_active: input.isActive },
   });
   return null;
 });

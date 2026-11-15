@@ -1,18 +1,20 @@
 "use client";
 
+import { Can, useCan } from "@/components/auth/user-context";
 import { useMemo, useState } from "react";
-import { Layers, MapPin, PackageSearch, PackageX, Plus } from "lucide-react";
+import { Layers, MapPin, PackageSearch, PackageX, Plus, TrendingDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, EmptyState } from "@/components/ui/card";
 import { Dialog, DialogActions } from "@/components/ui/dialog";
+import { ExportButton } from "@/components/ui/export-button";
 import { Field, FormError, Input, Select } from "@/components/ui/form";
 import { OpenRow } from "@/components/ui/open-row";
 import { Page, PageHeader, Stat, StatGrid, Toolbar } from "@/components/ui/page";
 import { paginate, Pagination } from "@/components/ui/pagination";
 import { Cell, Table, Td, Th } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
-import { createProduct } from "@/features/inventory/actions";
+import { createProduct, updateProduct } from "@/features/inventory/actions";
 import { categoryOf } from "@/features/inventory/category";
 import type { Product, StockBalance } from "@/features/inventory/types";
 import { useServerAction } from "@/hooks/use-server-action";
@@ -23,11 +25,13 @@ function AddAssetDialog() {
   const [name, setName] = useState("");
   const [sku, setSku] = useState("");
   const [setpoint, setSetpoint] = useState("");
+  const [reorder, setReorder] = useState("0");
   const { run, pending, error, clearError } = useServerAction(createProduct, () => {
     setOpen(false);
     setName("");
     setSku("");
     setSetpoint("");
+    setReorder("0");
   });
 
   return (
@@ -45,7 +49,12 @@ function AddAssetDialog() {
           className="grid gap-4"
           onSubmit={(event) => {
             event.preventDefault();
-            run({ name, sku, setpointC: setpoint === "" ? null : Number(setpoint) });
+            run({
+              name,
+              sku,
+              setpointC: setpoint === "" ? null : Number(setpoint),
+              reorderLevel: Number(reorder) || 0,
+            });
           }}
         >
           <Field label="Name">
@@ -81,6 +90,16 @@ function AddAssetDialog() {
               onChange={(event) => setSetpoint(event.target.value)}
             />
           </Field>
+          <Field label="Reorder level" hint="Ops are alerted when total stock falls to this. 0 turns the alert off.">
+            <Input
+              type="number"
+              min={0}
+              max={1000000}
+              step={1}
+              value={reorder}
+              onChange={(event) => setReorder(event.target.value)}
+            />
+          </Field>
           <FormError message={error} />
           <DialogActions onCancel={() => setOpen(false)}>
             <Button type="submit" disabled={pending}>
@@ -90,6 +109,76 @@ function AddAssetDialog() {
         </form>
       </Dialog>
     </>
+  );
+}
+
+function EditProductDialog({ product, onClose }: { product: Product; onClose: () => void }) {
+  const [name, setName] = useState(product.name);
+  const [setpoint, setSetpoint] = useState(product.setpoint_c === null ? "" : String(product.setpoint_c));
+  const [reorder, setReorder] = useState(String(product.reorder_level));
+  const [isActive, setIsActive] = useState(product.is_active);
+  const { run, pending, error } = useServerAction(updateProduct, onClose);
+
+  return (
+    <Dialog open onClose={onClose} title="Edit Product" description={product.sku}>
+      <form
+        className="grid gap-4"
+        onSubmit={(event) => {
+          event.preventDefault();
+          run({
+            id: product.id,
+            name,
+            setpointC: setpoint === "" ? null : Number(setpoint),
+            reorderLevel: Number(reorder) || 0,
+            isActive,
+          });
+        }}
+      >
+        <Field label="Name">
+          <Input required maxLength={200} value={name} onChange={(event) => setName(event.target.value)} />
+        </Field>
+        <Field label="Setpoint (°C)" hint="Sets the category: Frozen at −15 °C or colder, Chiller up to +8 °C.">
+          <Input
+            type="number"
+            step="any"
+            min={-100}
+            max={100}
+            value={setpoint}
+            onChange={(event) => setSetpoint(event.target.value)}
+          />
+        </Field>
+        <Field label="Reorder level" hint="Ops are alerted when total stock falls to this. 0 turns the alert off.">
+          <Input
+            type="number"
+            min={0}
+            max={1000000}
+            step={1}
+            value={reorder}
+            onChange={(event) => setReorder(event.target.value)}
+          />
+        </Field>
+        <label className="flex items-start gap-3 text-sm">
+          <input
+            type="checkbox"
+            className="mt-0.5 size-4 accent-primary"
+            checked={isActive}
+            onChange={(event) => setIsActive(event.target.checked)}
+          />
+          <span>
+            <span className="font-medium text-card-foreground">Available to order</span>
+            <span className="block text-xs text-muted-foreground">
+              A switched-off product can no longer be ordered. Existing orders and stock stay as they are.
+            </span>
+          </span>
+        </label>
+        <FormError message={error} />
+        <DialogActions onCancel={onClose}>
+          <Button type="submit" disabled={pending}>
+            {pending ? "Saving…" : "Save"}
+          </Button>
+        </DialogActions>
+      </form>
+    </Dialog>
   );
 }
 
@@ -105,6 +194,8 @@ export function AssetInventory({
   const [productId, setProductId] = useState("");
   const [locationId, setLocationId] = useState("");
   const [page, setPage] = useState(1);
+  const [editing, setEditing] = useState<Product | null>(null);
+  const canEdit = useCan()("catalog.manage");
 
   const assets = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -149,20 +240,39 @@ export function AssetInventory({
     stockByProduct.set(b.product_id, (stockByProduct.get(b.product_id) ?? 0) + b.quantity);
   }
   const unitsInStock = balances.reduce((sum, b) => sum + b.quantity, 0);
-  const outOfStock = products.filter((p) => !stockByProduct.get(p.id)).length;
+  const outOfStock = products.filter((p) => p.is_active && !stockByProduct.get(p.id)).length;
+  const isLow = (product: Product) =>
+    product.is_active &&
+    product.reorder_level > 0 &&
+    (stockByProduct.get(product.id) ?? 0) <= product.reorder_level;
+  const lowStock = products.filter(isLow).length;
 
   return (
     <Page>
       <PageHeader
         title="Products"
         description="Cooling-panel types and the stock held at each location."
-        actions={<AddAssetDialog />}
+        actions={
+          <Can permission="catalog.manage">
+            <AddAssetDialog />
+          </Can>
+        }
       />
 
       <StatGrid>
-        <Stat label="Products" icon={PackageSearch} value={formatNumber(products.length)} />
+        <Stat
+          label="Products"
+          icon={PackageSearch}
+          value={formatNumber(products.filter((p) => p.is_active).length)}
+        />
         <Stat label="Units in stock" icon={Layers} value={formatNumber(unitsInStock)} />
         <Stat label="Locations stocked" icon={MapPin} value={formatNumber(locations.length)} />
+        <Stat
+          label="Low stock"
+          icon={TrendingDown}
+          tone={lowStock ? "amber" : "green"}
+          value={formatNumber(lowStock)}
+        />
         <Stat
           label="Out of stock"
           icon={PackageX}
@@ -180,6 +290,35 @@ export function AssetInventory({
               : `${stockRows.length} of ${balances.length} shown · by location`
           }
           actions={
+            <>
+              {tab === "assets" ? (
+                <ExportButton
+                  filename="products"
+                  headers={["SKU", "Name", "Setpoint (°C)", "Category", "In stock", "Reorder level", "Orderable"]}
+                  rows={assets.map((a) => [
+                    a.sku,
+                    a.name,
+                    a.setpoint_c,
+                    a.category.label,
+                    a.inStock,
+                    a.reorder_level,
+                    a.is_active ? "Yes" : "No",
+                  ])}
+                />
+              ) : (
+                <ExportButton
+                  filename="stock-by-location"
+                  headers={["SKU", "Product", "Location", "Location name", "Quantity", "Unit"]}
+                  rows={stockRows.map((b) => [
+                    b.sku,
+                    b.product_name,
+                    b.location_code,
+                    b.location_name,
+                    b.quantity,
+                    b.unit,
+                  ])}
+                />
+              )}
             <Tabs
               value={tab}
               onChange={(next) => {
@@ -191,6 +330,7 @@ export function AssetInventory({
                 { value: "inventory", label: "Stock" },
               ]}
             />
+            </>
           }
         />
 
@@ -219,6 +359,7 @@ export function AssetInventory({
                     <Th className="text-center">Setpoint</Th>
                     <Th className="text-center">Locations</Th>
                     <Th className="text-center">In stock</Th>
+                    {canEdit && <Th className="text-right">Actions</Th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -234,6 +375,10 @@ export function AssetInventory({
                         <Td>
                           <Cell main={asset.name}>
                             <span className="font-mono">{asset.sku}</span>
+                            {!asset.is_active && <Badge tone="gray">Not orderable</Badge>}
+                            {isLow(asset) && (
+                              <Badge tone="amber">Low · reorder at {formatNumber(asset.reorder_level)}</Badge>
+                            )}
                           </Cell>
                         </Td>
                         <Td className="text-center">
@@ -246,6 +391,13 @@ export function AssetInventory({
                         <Td className="text-center font-medium tabular-nums">
                           {formatNumber(asset.inStock)}
                         </Td>
+                        {canEdit && (
+                          <Td className="text-right">
+                            <Button variant="outline" size="sm" onClick={() => setEditing(asset)}>
+                              Edit
+                            </Button>
+                          </Td>
+                        )}
                       </OpenRow>
                     );
                   })}
@@ -351,6 +503,7 @@ export function AssetInventory({
           </>
         )}
       </Card>
+      {editing && <EditProductDialog key={editing.id} product={editing} onClose={() => setEditing(null)} />}
     </Page>
   );
 }

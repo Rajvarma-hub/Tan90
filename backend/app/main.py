@@ -9,7 +9,7 @@ from app.db.base import init_schema
 from app.routers import (
     admin, auth, containers, deliveries, dispatches,
     exceptions_router, notifications, orders, packing, products,
-    returns, stations, inventory, directory,
+    returns, stations, inventory, directory, users,
 )
 
 @asynccontextmanager
@@ -42,6 +42,6 @@ def health():
 for r in (
     auth, orders, packing, dispatches, deliveries, returns,
     admin, stations, containers, exceptions_router, products, notifications,
-    inventory, directory,
+    inventory, directory, users,
 ):
     app.include_router(r.router)

@@ -1,7 +1,10 @@
 import "server-only";
 import { notFound } from "next/navigation";
 import { AppError } from "@/lib/errors";
+import { formatDuration } from "@/lib/format";
+import { can, type Role } from "@/lib/permissions";
 import { backend } from "@/server/backend";
+import { getCurrentUser } from "@/server/session";
 import type {
   OrderActionOptions,
   OrderDetail,
@@ -34,13 +37,23 @@ type ApiContainer = {
 export async function getOrdersPage(): Promise<{
   orders: OrderSummary[];
   options: OrderFormOptions;
+  external: boolean;
 }> {
+  const user = await getCurrentUser();
+  // Staff see the whole operation. Customers and drivers get only their own orders, which the
+  // API already limits, and no customer or station lists.
+  const isStaff = can(user.role, "staff.view");
   const [orders, customers, stations, products] = await Promise.all([
     backend<ApiOrder[]>("/api/orders"),
-    backend<ApiCustomer[]>("/api/customers"),
-    backend<ApiStation[]>("/api/stations"),
-    backend<ApiProduct[]>("/api/products"),
+    isStaff ? backend<ApiCustomer[]>("/api/customers") : Promise.resolve<ApiCustomer[]>([]),
+    isStaff ? backend<ApiStation[]>("/api/stations") : Promise.resolve<ApiStation[]>([]),
+    can(user.role, "orders.create")
+      ? backend<ApiProduct[]>("/api/products")
+      : Promise.resolve<ApiProduct[]>([]),
   ]);
+  if (!isStaff && user.customer_id) {
+    customers.push({ id: user.customer_id, name: user.customer_name ?? "Your company" });
+  }
   const customerName = new Map(customers.map((c) => [c.id, c.name]));
   const stationCode = new Map(stations.map((s) => [s.id, s.code]));
 
@@ -60,6 +73,7 @@ export async function getOrdersPage(): Promise<{
       expectedDeliveryAt: order.expected_delivery_at,
       createdAt: order.created_at,
     })),
+    external: !isStaff,
     options: {
       customers: customers.map((c) => ({ id: c.id, label: c.name })),
       stations: freezingStations(stations),
@@ -76,9 +90,12 @@ function freezingStations(stations: ApiStation[]) {
 
 export async function getOrderDetail(orderId: string): Promise<OrderDetail> {
   try {
-    return await backend<OrderDetail>(
+    const detail = await backend<OrderDetail>(
       `/api/orders/${encodeURIComponent(orderId)}/detail`,
     );
+    return detail.last_location
+      ? { ...detail, location_age: formatDuration(detail.last_location.recorded_at, Date.now()) }
+      : detail;
   } catch (error) {
     if (error instanceof AppError && error.code === "NOT_FOUND") notFound();
     throw error;
@@ -87,7 +104,12 @@ export async function getOrderDetail(orderId: string): Promise<OrderDetail> {
 
 export async function getOrderActionOptions(
   order: OrderDetail,
+  role: Role,
 ): Promise<OrderActionOptions> {
+  // Station and driver lists are for staff who assign work; the API refuses them to others.
+  if (!can(role, "staff.view")) {
+    return { stations: [], drivers: [], availableContainers: [] };
+  }
   const packing = order.status === "PACKING" && order.station;
   const [stations, drivers, containers] = await Promise.all([
     backend<ApiStation[]>("/api/stations?kind=FREEZING_STATION"),

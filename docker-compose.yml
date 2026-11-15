@@ -1,14 +1,69 @@
+# Full stack: PostgreSQL, the API and the portal.
+#
+#   cp .env.docker.example .env     # then fill in the secrets
+#   docker compose up -d --build
+#   docker compose exec api python -m app.cli create-admin --email you@example.com --name "Your Name"
+#
+# Schema migrations run on every `up`, before the API starts. Only the portal is published
+# to the network; the API listens on this machine only.
+name: tan90
+
 services:
-  app:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: tan90
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: tan90
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tan90 -d tan90"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  migrate:
+    build: ./backend
+    image: tan90-api
+    command: ["alembic", "upgrade", "head"]
+    environment: &api-environment
+      ENVIRONMENT: production
+      DATABASE_URL: postgresql://tan90:${POSTGRES_PASSWORD}@db:5432/tan90
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env (random, 32+ characters)}
+      CORS_ORIGINS: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build: ./backend
+    image: tan90-api
+    environment: *api-environment
+    ports:
+      - "127.0.0.1:8001:8001"
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  web:
     build:
       context: .
       args:
         NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+    environment:
+      BACKEND_API_URL: http://api:8001
     ports:
       - "3000:3000"
-    env_file:
-      - path: .env.local
-        required: false
+    depends_on:
+      api:
+        condition: service_healthy
     restart: unless-stopped
 
-  # Add the database service here once a database is chosen.
+volumes:
+  db-data:

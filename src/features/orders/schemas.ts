@@ -53,6 +53,7 @@ export const orderActionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("depart"), orderId: id }),
   z.object({ action: z.literal("arrive"), orderId: id }),
   z.object({ action: z.literal("deliver"), orderId: id }),
+  z.object({ action: z.literal("verify_delivery"), orderId: id, code: z.string().trim().min(1).max(200) }),
   z.object({
     action: z.literal("confirm_receipt"),
     orderId: id,

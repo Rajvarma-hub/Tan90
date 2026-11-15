@@ -1,12 +1,15 @@
 """Central orchestrator. Every order state change goes through here."""
+import base64
 import hashlib
+import hmac
 import json
-import secrets
+import uuid
 from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.order_states import (
     OrderStatus, check_order_transition, check_container_transition,
     InvalidOrderTransition, InvalidContainerTransition,
@@ -176,6 +179,10 @@ def approve_order(db: Session, order_id: str, *, station_id: str, actor: User) -
                       title=f"Order {order.order_number} approved",
                       body="Ready to pack",
                       reference_type="order", reference_id=order.id)
+    notif.notify_customer(db, order.customer_id, kind="ORDER_APPROVED",
+                          title=f"Your order {order.order_number} was approved",
+                          body="We are getting it ready to pack.",
+                          reference_type="order", reference_id=order.id)
     db.commit()
     db.refresh(order)
     return order
@@ -187,6 +194,10 @@ def cancel_order(db: Session, order_id: str, actor: User) -> Order:
     if not order:
         raise HTTPException(404, "Order not found")
     _transition(db, order, "cancel", actor)
+    notif.notify_customer(db, order.customer_id, kind="ORDER_CANCELLED",
+                          title=f"Your order {order.order_number} was cancelled",
+                          body="Contact Tan90 if you did not expect this.",
+                          reference_type="order", reference_id=order.id)
     db.commit()
     db.refresh(order)
     return order
@@ -331,6 +342,10 @@ def dispatch_order(db: Session, order_id: str, *, driver_id: str, vehicle_ref: s
                       title=f"Order {order.order_number} dispatched",
                       body=f"Driver {driver_id}",
                       reference_type="order", reference_id=order.id)
+    notif.notify_customer(db, order.customer_id, kind="ORDER_DISPATCHED",
+                          title=f"Your order {order.order_number} is on its way",
+                          body=f"{driver.full_name} is delivering it.",
+                          reference_type="order", reference_id=order.id)
 
     db.commit()
     db.refresh(order)
@@ -380,18 +395,19 @@ def arrive(db: Session, order_id: str, actor: User) -> Order:
         task.status = "ARRIVED"
         task.arrived_at = _now()
 
-    # generate QR token for customer
-    raw = secrets.token_urlsafe(32)
+    # The customer's delivery code. Only its hash is stored; the code itself is derived from the
+    # token id and the server secret, so the driver's screen can show it again on demand.
+    qr_id = f"qr-{uuid.uuid4().hex[:8].upper()}"
     db.add(QRToken(
-        order_id=order_id, token_hash=hashlib.sha256(raw.encode()).hexdigest(),
+        id=qr_id, order_id=order_id,
+        token_hash=hashlib.sha256(qr_secret(qr_id).encode()).hexdigest(),
         expires_at=_now() + timedelta(hours=24),
     ))
 
-    # notify customer with the raw token in the message (in production this would be a link)
-    notif.notify_user(db, _customer_user_id(db, order.customer_id), kind="DELIVERY_ARRIVED",
-                      title=f"Your delivery {order.order_number} has arrived",
-                      body=f"Open your portal and verify containers. QR token: {raw[:8]}...",
-                      reference_type="order", reference_id=order.id)
+    notif.notify_customer(db, order.customer_id, kind="DELIVERY_ARRIVED",
+                          title=f"Your delivery {order.order_number} has arrived",
+                          body="Scan the driver's code or enter it in your portal to verify the containers.",
+                          reference_type="order", reference_id=order.id)
 
     db.commit()
     db.refresh(order)
@@ -413,14 +429,6 @@ def deliver(db: Session, order_id: str, actor: User) -> Order:
     return order
 
 
-def _customer_user_id(db: Session, customer_id: str) -> str | None:
-    """First CUSTOMER user for a given customer_id."""
-    u = db.query(User).filter(
-        User.customer_id == customer_id, User.role == "CUSTOMER"
-    ).first()
-    return u.id if u else None
-
-
 def verify_qr(db: Session, order_id: str, raw_token: str, actor: User) -> Order:
     """Customer scans QR — validates token, returns order with expected containers."""
     order = db.get(Order, order_id)
@@ -434,16 +442,46 @@ def verify_qr(db: Session, order_id: str, raw_token: str, actor: User) -> Order:
         QRToken.order_id == order_id, QRToken.token_hash == token_hash,
     ).first()
     if not qr:
-        raise HTTPException(401, "Invalid QR token")
-    if qr.expires_at < _now():
-        raise HTTPException(401, "QR token expired")
+        raise HTTPException(400, "Invalid delivery code")
+    # DateTime columns come back without a timezone, and are always UTC.
+    if qr.expires_at < _now().replace(tzinfo=None):
+        raise HTTPException(400, "This delivery code has expired")
     if qr.used_at:
-        raise HTTPException(409, "QR token already used")
+        raise HTTPException(409, "This delivery code has already been used")
 
     qr.used_at = _now()
     qr.used_by_user_id = actor.id
     db.commit()
     return order
+
+
+def qr_secret(qr_id: str) -> str:
+    """The delivery code for a token id: unguessable without the server secret."""
+    digest = hmac.new(
+        settings.jwt_secret.encode(), f"delivery-qr:{qr_id}".encode(), hashlib.sha256
+    ).digest()
+    return base64.urlsafe_b64encode(digest).decode().rstrip("=")
+
+
+def delivery_code(db: Session, order_id: str, actor: User) -> dict:
+    """What the driver shows the customer on arrival."""
+    order = db.get(Order, order_id)
+    if not order:
+        raise HTTPException(404, "Order not found")
+    _require_driver_owner(order, actor)
+    qr = db.query(QRToken).filter(QRToken.order_id == order_id).order_by(
+        QRToken.created_at.desc()).first()
+    if not qr:
+        raise HTTPException(409, "No delivery code yet: the driver has not arrived")
+    code = qr_secret(qr.id)
+    if hashlib.sha256(code.encode()).hexdigest() != qr.token_hash:
+        raise HTTPException(404, "This delivery code cannot be shown")
+    return {"token": code, "expires_at": qr.expires_at, "used": qr.used_at is not None}
+
+
+def is_delivery_verified(db: Session, order_id: str) -> bool:
+    return db.query(QRToken).filter(
+        QRToken.order_id == order_id, QRToken.used_at.isnot(None)).first() is not None
 
 
 def confirm_receipt(db: Session, order_id: str, *, received: list[str],
@@ -456,6 +494,8 @@ def confirm_receipt(db: Session, order_id: str, *, received: list[str],
     if actor.role == "CUSTOMER":
         if actor.customer_id != order.customer_id:
             raise HTTPException(403, "Not your order")
+        if not is_delivery_verified(db, order_id):
+            raise HTTPException(409, "Verify the delivery with the driver's code first")
     elif actor.role not in ("SUPER_ADMIN", "OPERATIONS_ADMIN"):
         raise HTTPException(403, "Not allowed")
 
@@ -652,7 +692,7 @@ def inspect_and_close(db: Session, order_id: str, results: list[dict],
             raise HTTPException(400, f"Container {r['container_id']} not ready for inspection")
 
         db.add(ReturnInspection(
-            return_id=order.id, container_id=c.id,  # note: ReturnInspection.return_id is now order_id
+            return_id=order.id, container_id=c.id,
             condition=r["condition"], contains_panels=r.get("contains_panels", False),
             notes=r.get("notes"), inspected_by=actor.id,
         ))
@@ -675,6 +715,10 @@ def inspect_and_close(db: Session, order_id: str, results: list[dict],
                           title=f"Order {order.order_number} closed",
                           body="All containers inspected cleanly",
                           reference_type="order", reference_id=order.id)
+        notif.notify_customer(db, order.customer_id, kind="ORDER_CLOSED",
+                              title=f"Order {order.order_number} is closed",
+                              body="We have your containers back. Thank you.",
+                              reference_type="order", reference_id=order.id)
 
     db.commit()
     db.refresh(order)

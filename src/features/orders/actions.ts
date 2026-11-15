@@ -60,6 +60,9 @@ export const runOrderAction = createAction(orderActionSchema, async (input) => {
     case "deliver":
       await orders.postOrderStep(orderId, input.action);
       break;
+    case "verify_delivery":
+      await orders.verifyDelivery(orderId, input.code);
+      break;
     case "confirm_receipt":
       await orders.confirmReceipt(orderId, input.missing, input.damaged, input.notes);
       break;

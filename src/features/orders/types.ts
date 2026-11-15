@@ -47,7 +47,7 @@ export type OrderContainer = {
   contents: { sku: string; qty: number }[];
 };
 
-type Person = { id: string; full_name: string; email: string };
+type Person = { id: string; full_name: string; email: string | null };
 
 // Shape of GET /api/orders/{id}/detail.
 export type OrderDetail = {
@@ -83,6 +83,18 @@ export type OrderDetail = {
   driver: Person | null;
   vehicle_ref: string | null;
   return_driver: Person | null;
+  // The customer has checked the driver's code, which unlocks confirming receipt.
+  delivery_verified: boolean;
+  // The driver's task, and where the vehicle was last seen while on the road.
+  task_id: string | null;
+  last_location: {
+    latitude: number;
+    longitude: number;
+    accuracy_m: number | null;
+    recorded_at: string;
+  } | null;
+  // How long ago that was, worked out when the page is built.
+  location_age?: string;
   history: {
     id: string;
     action: string;

@@ -1,4 +1,6 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from app.core.security import check_password_policy
 
 
 class LoginRequest(BaseModel):
@@ -18,9 +20,20 @@ class UserOut(BaseModel):
     role: str
     location_id: str | None
     customer_id: str | None
+    customer_name: str | None = None
 
     class Config:
         from_attributes = True
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(max_length=200)
+    new_password: str = Field(min_length=8, max_length=200)
+
+    @field_validator("new_password")
+    @classmethod
+    def _password_policy(cls, v: str) -> str:
+        return check_password_policy(v)
 
 
 class RegisterRequest(BaseModel):
@@ -31,3 +44,8 @@ class RegisterRequest(BaseModel):
     location_id: str | None = None
     customer_id: str | None = None
     customer_name: str | None = None
+
+    @field_validator("password")
+    @classmethod
+    def _password_policy(cls, v: str) -> str:
+        return check_password_policy(v)

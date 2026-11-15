@@ -11,6 +11,6 @@ from app.models.delivery import DeliveryTask, GPSEvent, DeliveryScan
 from app.models.returns import ReturnRequest, ReturnInspection
 from app.models.inventory import InventoryBalance, InventoryMovement
 from app.models.audit import ContainerMovement, ExceptionRecord, AuditLog
-from app.models.notification import Notification
+from app.models.notification import Notification, NotificationRead
 from app.models.qr import QRToken
 from app.models.order_event import OrderEvent

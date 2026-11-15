@@ -12,10 +12,17 @@ import { useServerAction } from "@/hooks/use-server-action";
 
 type Line = { key: number; productId: string; quantity: string };
 
-export function NewOrderDialog({ options }: { options: OrderFormOptions }) {
+export function NewOrderDialog({
+  options,
+  ownCompany = false,
+}: {
+  options: OrderFormOptions;
+  // A customer places orders for their own company only, so there is nothing to choose.
+  ownCompany?: boolean;
+}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [customerId, setCustomerId] = useState("");
+  const [customerId, setCustomerId] = useState(ownCompany ? (options.customers[0]?.id ?? "") : "");
   const [stationId, setStationId] = useState("");
   const [destination, setDestination] = useState("");
   const [expectedDeliveryAt, setExpectedDeliveryAt] = useState("");
@@ -65,38 +72,46 @@ export function NewOrderDialog({ options }: { options: OrderFormOptions }) {
         open={open}
         onClose={() => setOpen(false)}
         title="New Order"
-        description="Place an order on behalf of a customer. It goes to Ops for approval."
+        description={
+          ownCompany
+            ? "Tell us what you need. Ops reviews and approves it."
+            : "Place an order on behalf of a customer. It goes to Ops for approval."
+        }
         wide
       >
         <form onSubmit={submit} className="grid gap-4">
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Customer">
-              <Select
-                required
-                value={customerId}
-                onChange={(event) => setCustomerId(event.target.value)}
-              >
-                <option value="">Select customer</option>
-                {options.customers.map((customer) => (
-                  <option key={customer.id} value={customer.id}>
-                    {customer.label}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Field label="Freezing station" hint="Optional. Ops assigns it on approval.">
-              <Select
-                value={stationId}
-                onChange={(event) => setStationId(event.target.value)}
-              >
-                <option value="">Not assigned</option>
-                {options.stations.map((station) => (
-                  <option key={station.id} value={station.id}>
-                    {station.label}
-                  </option>
-                ))}
-              </Select>
-            </Field>
+            {!ownCompany && (
+              <Field label="Customer">
+                <Select
+                  required
+                  value={customerId}
+                  onChange={(event) => setCustomerId(event.target.value)}
+                >
+                  <option value="">Select customer</option>
+                  {options.customers.map((customer) => (
+                    <option key={customer.id} value={customer.id}>
+                      {customer.label}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            )}
+            {!ownCompany && (
+              <Field label="Freezing station" hint="Optional. Ops assigns it on approval.">
+                <Select
+                  value={stationId}
+                  onChange={(event) => setStationId(event.target.value)}
+                >
+                  <option value="">Not assigned</option>
+                  {options.stations.map((station) => (
+                    <option key={station.id} value={station.id}>
+                      {station.label}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            )}
             <Field label="Deliver to">
               <Input
                 value={destination}

@@ -24,7 +24,8 @@ class ReturnInspection(Base):
     __tablename__ = "return_inspections"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: f"rni-{uuid.uuid4().hex[:8].upper()}")
-    return_id: Mapped[str] = mapped_column(String, ForeignKey("return_requests.id"), nullable=False, index=True)
+    # Holds the order id: returns are tracked on the order, not on a ReturnRequest row.
+    return_id: Mapped[str] = mapped_column(String, ForeignKey("orders.id"), nullable=False, index=True)
     container_id: Mapped[str] = mapped_column(String, ForeignKey("containers.id"), nullable=False)
     condition: Mapped[str] = mapped_column(String, nullable=False)
     contains_panels: Mapped[bool] = mapped_column(Boolean, default=False)
