@@ -49,6 +49,7 @@ __pycache__/
 tan90.db
 tan90.db-journal
 tan90.db-wal
+tan90.db.bak
 .pytest_cache/
 
 # playwright
