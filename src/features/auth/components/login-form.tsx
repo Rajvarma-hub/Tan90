@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import { Loader2, Lock, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field, FormError, Input } from "@/components/ui/form";
 import { signIn, type SignInState } from "@/features/auth/actions";
@@ -17,27 +18,50 @@ export function LoginForm({ next, notice }: { next: string; notice: string | nul
         </p>
       )}
       <Field label="Email">
-        <Input
-          name="email"
-          type="email"
-          autoComplete="username"
-          autoFocus
-          required
-          maxLength={320}
-        />
+        <div className="relative">
+          <Mail
+            aria-hidden
+            className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+          />
+          <Input
+            name="email"
+            type="email"
+            autoComplete="username"
+            placeholder="you@company.com"
+            autoFocus
+            required
+            maxLength={320}
+            className="h-10 w-full pl-9"
+          />
+        </div>
       </Field>
       <Field label="Password">
-        <Input
-          name="password"
-          type="password"
-          autoComplete="current-password"
-          required
-          maxLength={200}
-        />
+        <div className="relative">
+          <Lock
+            aria-hidden
+            className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+          />
+          <Input
+            name="password"
+            type="password"
+            autoComplete="current-password"
+            placeholder="••••••••"
+            required
+            maxLength={200}
+            className="h-10 w-full pl-9"
+          />
+        </div>
       </Field>
       <FormError message={state.error} />
-      <Button type="submit" disabled={pending}>
-        {pending ? "Signing in…" : "Sign in"}
+      <Button type="submit" disabled={pending} className="mt-1 h-10 w-full">
+        {pending ? (
+          <>
+            <Loader2 aria-hidden className="animate-spin" />
+            Signing in…
+          </>
+        ) : (
+          "Sign in"
+        )}
       </Button>
     </form>
   );
